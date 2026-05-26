@@ -41,7 +41,11 @@ export async function saveDb() {
     // Supabase auto-saves, no action needed
     return;
   }
-  await db.write();
+  try {
+    await db.write();
+  } catch (err) {
+    console.warn('Gagal menulis ke local db (mungkin read-only filesystem di serverless environment):', err.message);
+  }
 }
 
 export function isUsingSupabase() {

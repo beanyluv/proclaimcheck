@@ -77,21 +77,54 @@ export default function ManajemenPenggunaPage() {
           password: form.password,
           role: form.role,
         };
-        const created = await createUserOnServer(newUser);
+        
+        let created;
+        try {
+          created = await createUserOnServer(newUser);
+        } catch (serverErr) {
+          console.warn('Gagal menambah ke server, fallback ke local storage', serverErr);
+          const localUsers = getUsers();
+          const exists = localUsers.some(u => u.username === newUser.username);
+          if (exists) throw new Error('Username sudah digunakan');
+          localUsers.push(newUser);
+          saveUsers(localUsers);
+          created = newUser;
+          showMsg(`Pengguna "${form.nama}" ditambahkan ke penyimpanan lokal`, 'success');
+        }
+
         const updated = [...users, created];
         setUsers(updated);
-        showMsg(`Pengguna "${form.nama}" berhasil ditambahkan`);
       } else {
-        const updatedUser = await updateUserOnServer(editUser.id, {
+        const updatedFields = {
           username: form.username,
           password: form.password,
           nama: form.nama,
           email: form.email,
           role: form.role,
-        });
+        };
+
+        let updatedUser;
+        try {
+          updatedUser = await updateUserOnServer(editUser.id, updatedFields);
+        } catch (serverErr) {
+          console.warn('Gagal update ke server, fallback ke local storage', serverErr);
+          const localUsers = getUsers().map(u => {
+            if (u.id === editUser.id) {
+              return {
+                ...u,
+                ...updatedFields,
+                password: form.password ? form.password : u.password
+              };
+            }
+            return u;
+          });
+          saveUsers(localUsers);
+          updatedUser = localUsers.find(u => u.id === editUser.id);
+          showMsg(`Pengguna "${form.nama}" diperbarui secara lokal`, 'success');
+        }
+
         const updated = users.map(u => u.id === editUser.id ? updatedUser : u);
         setUsers(updated);
-        showMsg(`Pengguna "${form.nama}" berhasil diperbarui`);
       }
     } catch (error: any) {
       showMsg(error?.message || 'Gagal menyimpan pengguna', 'error');
@@ -112,11 +145,18 @@ export default function ManajemenPenggunaPage() {
   const handleDelete = async (id: string) => {
     if (id === currentUser?.id) { showMsg('Tidak dapat menghapus akun sendiri', 'error'); return; }
     try {
-      await deleteUserOnServer(id);
+      try {
+        await deleteUserOnServer(id);
+        showMsg('Pengguna berhasil dihapus');
+      } catch (serverErr) {
+        console.warn('Gagal menghapus dari server, fallback ke local storage', serverErr);
+        const localUsers = getUsers().filter(u => u.id !== id);
+        saveUsers(localUsers);
+        showMsg('Pengguna berhasil dihapus dari penyimpanan lokal');
+      }
       const updated = users.filter(u => u.id !== id);
       setUsers(updated);
       setDeleteConfirm(null);
-      showMsg('Pengguna berhasil dihapus');
     } catch (error: any) {
       showMsg(error?.message || 'Gagal menghapus pengguna', 'error');
     }
