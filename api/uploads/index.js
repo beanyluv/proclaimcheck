@@ -71,21 +71,21 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    try {
-      const uploadEntry = {
-        id,
-        fileName: fileName || null,
-        fileType: fileType || null,
-        fileData: fileData || null,
-        videoLink: videoLink || null,
-        puskesmas,
-        month,
-        year,
-        documentType,
-        uploadedAt,
-        uploadedBy: uploadedBy || null,
-      };
+    const uploadEntry = {
+      id,
+      fileName: fileName || null,
+      fileType: fileType || null,
+      fileData: fileData || null,
+      videoLink: videoLink || null,
+      puskesmas,
+      month,
+      year,
+      documentType,
+      uploadedAt,
+      uploadedBy: uploadedBy || null,
+    };
 
+    try {
       if (isUsingSupabase()) {
         const supabase = getSupabase();
         const { data: existing, error: existingError } = await supabase
