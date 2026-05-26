@@ -39,7 +39,18 @@ export default async function handler(req, res) {
         } catch (err) {
           // Final fallback: try plain select
           const { data, error } = await supabase.from('uploads').select('*');
-          if (error) throw error;
+          if (error) {
+            const msg = (error.message || '').toLowerCase();
+            if (msg.includes('could not find the') || (msg.includes('column') && msg.includes('uploads'))) {
+              try {
+                const local = await getLocalDb();
+                return res.status(200).json(local.data.uploads || []);
+              } catch (e) {
+                throw error;
+              }
+            }
+            throw error;
+          }
           return res.status(200).json(data || []);
         }
       } else {
