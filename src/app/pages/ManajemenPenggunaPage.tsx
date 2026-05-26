@@ -11,12 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 
 interface User { id: string; username: string; password: string; nama: string; email: string; role: string; foto?: string; }
 
-const ROLES = ['Administrasi Klaim', 'Dokter', 'Petugas Puskesmas', 'Supervisor'];
+const ROLES = ['Administrasi Klaim', 'Petugas Puskesmas'];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   'Administrasi Klaim': ['Beranda', 'Verifikasi Berkas', 'Laporan', 'Riwayat', 'Pengaturan'],
-  'Dokter': ['Beranda', 'Verifikasi Berkas', 'Laporan'],
   'Petugas Puskesmas': ['Beranda', 'Unggah Berkas'],
-  'Supervisor': ['Beranda', 'Verifikasi Berkas', 'Laporan', 'Riwayat'],
 };
 
 export default function ManajemenPenggunaPage() {
@@ -30,7 +28,7 @@ export default function ManajemenPenggunaPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [form, setForm] = useState({ nama: '', username: '', email: '', password: '', role: 'Dokter' });
+  const [form, setForm] = useState({ nama: '', username: '', email: '', password: '', role: 'Petugas Puskesmas' });
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -102,7 +100,7 @@ export default function ManajemenPenggunaPage() {
 
     setShowForm(false);
     setEditUser(null);
-    setForm({ nama: '', username: '', email: '', password: '', role: 'Dokter' });
+    setForm({ nama: '', username: '', email: '', password: '', role: 'Petugas Puskesmas' });
   };
 
   const handleEdit = (user: User) => {
@@ -158,7 +156,7 @@ export default function ManajemenPenggunaPage() {
           <div className="bg-white rounded-[10px] shadow-sm overflow-hidden mb-5">
             <div className="p-4 border-b border-[#f0f0f0] flex items-center justify-between">
               <h3 className="font-['Mukta'] font-semibold text-[16px] text-[#1a4a43]">Daftar Pengguna ({users.length})</h3>
-              <button onClick={() => { setEditUser(null); setForm({ nama:'',username:'',email:'',password:'',role:'Dokter' }); setShowForm(true); }}
+              <button onClick={() => { setEditUser(null); setForm({ nama:'',username:'',email:'',password:'',role:'Petugas Puskesmas' }); setShowForm(true); }}
                 className="flex items-center gap-2 bg-[#1f6f5f] text-white px-4 py-2 rounded-lg font-['Mukta'] text-[14px] font-medium hover:bg-[#165449] transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                 Tambah Pengguna

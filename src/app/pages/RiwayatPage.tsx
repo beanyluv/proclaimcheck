@@ -251,7 +251,7 @@ export default function RiwayatPage() {
             >
               <option>Peran</option>
               <option>Administrasi Klaim</option>
-              <option>Dokter</option>
+              <option>Petugas Puskesmas</option>
             </select>
 
             <select title="Filter Kegiatan"

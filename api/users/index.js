@@ -48,18 +48,18 @@ export default async function handler(req, res) {
             {
               id: '2',
               username: 'kanaya',
-              password: 'dokter123',
+              password: 'puskesmas123',
               nama: 'Kanaya Talita',
               email: 'kanaya.talita@example.com',
-              role: 'Dokter',
+              role: 'Petugas Puskesmas',
             },
             {
               id: '3',
               username: 'ferdyana',
-              password: 'dokter123',
+              password: 'puskesmas123',
               nama: 'Ferdyana',
               email: 'ferdyana@example.com',
-              role: 'Dokter',
+              role: 'Petugas Puskesmas',
             }
           ];
           const { error: seedError } = await supabase.from('users').insert(defaultUsers);
