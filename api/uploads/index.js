@@ -88,12 +88,11 @@ export default async function handler(req, res) {
 
       if (isUsingSupabase()) {
         const supabase = getSupabase();
-        const { data: existing } = await supabase
+        const { data: existing, error: existingError } = await supabase
           .from('uploads')
           .select('id')
           .eq('id', id)
-          .single()
-          .catch(() => ({ data: null }));
+          .maybeSingle();
 
         if (existing) {
           const { data, error } = await supabase
