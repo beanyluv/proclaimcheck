@@ -28,6 +28,14 @@ export async function prepareDb() {
   return db;
 }
 
+export async function getLocalDb() {
+  await db.read();
+  db.data ||= { uploads: [], users: [] };
+  if (!Array.isArray(db.data.uploads)) db.data.uploads = [];
+  if (!Array.isArray(db.data.users)) db.data.users = [];
+  return db;
+}
+
 export async function saveDb() {
   if (isSupabaseEnabled()) {
     // Supabase auto-saves, no action needed

@@ -1,4 +1,4 @@
-import { prepareDb, saveDb, isUsingSupabase } from '../_db.js';
+import { prepareDb, saveDb, isUsingSupabase, getLocalDb } from '../_db.js';
 import { getSupabase } from '../supabase.js';
 
 const setCors = (res) => {
@@ -121,6 +121,24 @@ export default async function handler(req, res) {
       return res.status(201).json({ success: true });
     } catch (error) {
       console.error('POST /api/uploads error:', error.message);
+      // If Supabase schema/cache errors occur (missing column in PostgREST schema cache),
+      // fallback to local LowDB persistence so uploads are not lost.
+      const msg = (error.message || '').toLowerCase();
+      if (msg.includes('could not find the') || (msg.includes('column') && msg.includes('uploads'))) {
+        try {
+          const db = await getLocalDb();
+          const uploads = db.data.uploads;
+          const existing = uploads.find((item) => item.id === id);
+          if (existing) Object.assign(existing, uploadEntry);
+          else uploads.unshift(uploadEntry);
+          await saveDb();
+          return res.status(201).json({ success: true, fallback: 'local' });
+        } catch (e) {
+          console.error('Local fallback failed:', e.message);
+          return res.status(500).json({ error: e.message || 'Server error' });
+        }
+      }
+
       return res.status(500).json({ error: error.message || 'Server error' });
     }
   }
