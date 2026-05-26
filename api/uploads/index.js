@@ -1,0 +1,113 @@
+import { prepareDb, saveDb, isUsingSupabase } from '../_db.js';
+import { getSupabase } from '../supabase.js';
+
+const setCors = (res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+};
+
+export default async function handler(req, res) {
+  setCors(res);
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  if (req.method === 'GET') {
+    try {
+      if (isUsingSupabase()) {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+          .from('uploads')
+          .select('*')
+          .order('createdAt', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json(data || []);
+      } else {
+        const db = await prepareDb();
+        return res.status(200).json(db.data.uploads);
+      }
+    } catch (error) {
+      console.error('GET /api/uploads error:', error.message);
+      return res.status(500).json({ error: error.message || 'Server error' });
+    }
+  }
+
+  if (req.method === 'POST') {
+    const {
+      id,
+      fileName,
+      fileType,
+      fileData,
+      videoLink,
+      puskesmas,
+      month,
+      year,
+      documentType,
+      uploadedAt,
+      uploadedBy,
+    } = req.body;
+
+    if (!id || !puskesmas || !month || !year || !documentType || !uploadedAt) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+      const uploadEntry = {
+        id,
+        fileName: fileName || null,
+        fileType: fileType || null,
+        fileData: fileData || null,
+        videoLink: videoLink || null,
+        puskesmas,
+        month,
+        year,
+        documentType,
+        uploadedAt,
+        uploadedBy: uploadedBy || null,
+      };
+
+      if (isUsingSupabase()) {
+        const supabase = getSupabase();
+        const { data: existing } = await supabase
+          .from('uploads')
+          .select('id')
+          .eq('id', id)
+          .single()
+          .catch(() => ({ data: null }));
+
+        if (existing) {
+          const { data, error } = await supabase
+            .from('uploads')
+            .update(uploadEntry)
+            .eq('id', id);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('uploads')
+            .insert([uploadEntry]);
+          if (error) throw error;
+        }
+      } else {
+        const db = await prepareDb();
+        const uploads = db.data.uploads;
+        const existing = uploads.find((item) => item.id === id);
+        if (existing) {
+          Object.assign(existing, uploadEntry);
+        } else {
+          uploads.unshift(uploadEntry);
+        }
+        await saveDb();
+      }
+
+      return res.status(201).json({ success: true });
+    } catch (error) {
+      console.error('POST /api/uploads error:', error.message);
+      return res.status(500).json({ error: error.message || 'Server error' });
+    }
+  }
+
+  res.setHeader('Allow', 'GET,POST,OPTIONS');
+  return res.status(405).json({ error: 'Method not allowed' });
+}

@@ -1,0 +1,58 @@
+{
+  "uploads": [
+    {
+      "id": "134242339126505386",
+      "fileName": "README.md",
+      "fileType": "text/markdown",
+      "fileData": "CiAgIyBQUk9DTEFJTSBDSEVDSwoKICBUaGlzIGlzIGEgY29kZSBidW5kbGUgZm9yIFBST0NMQUlNIENIRUNLLiBUaGUgb3JpZ2luYWwgcHJvamVjdCBpcyBhdmFpbGFibGUgYXQgaHR0cHM6Ly93d3cuZmlnbWEuY29tL2Rlc2lnbi9JbjZoVEhUWGFYcEpEVzdJWU5ybzJVL1BST0NMQUlNLUNIRUNLLgoKICAjIyBSdW5uaW5nIHRoZSBjb2RlCgogIFJ1biBgbnBtIGlgIHRvIGluc3RhbGwgdGhlIGRlcGVuZGVuY2llcy4KCiAgUnVuIGBucG0gcnVuIGRldmAgdG8gc3RhcnQgdGhlIGRldmVsb3BtZW50IHNlcnZlci4KCiAgIyMgUHJvZHVjdGlvbiBEZXBsb3ltZW50CgogICMjIyBPcHRpb24gMTogUXVpY2sgVmVyY2VsIERlcGxveSAod2l0aCBwZXJzaXN0ZW50IFN1cGFiYXNlIGRhdGFiYXNlKQogIAogIDEuIFJlYWQgW1NVUEFCQVNFX1NFVFVQLm1kXSguL1NVUEFCQVNFX1NFVFVQLm1kKSB0byBjcmVhdGUgYW5kIGNvbmZpZ3VyZSBTdXBhYmFzZSBkYXRhYmFzZQogIDIuIEZvbGxvdyBbREVQTE9ZX1BST0RVQ1RJT04ubWRdKC4vREVQTE9ZX1BST0RVQ1RJT04ubWQpIGZvciB0ZXJtaW5hbC1iYXNlZCBkZXBsb3ltZW50IHZpYSBWZXJjZWwKICAKICAjIyMgT3B0aW9uIDI6IERlcGxveSBkZW5nYW4gc2VydmVybGVzcyBBUEkgKG5vIGV4dGVybmFsIGRhdGFiYXNlKQogIAogIFZlcmNlbCBjb25maWcgc3VkYWggcmVhZHkuIFNldHVwOgogIAogIDEuIFBhc3Rpa2FuIGB2ZXJjZWwuanNvbmAgYWRhIGRpIHJvb3QgZGFuIGJlcmlzaSBydWxlIHJld3JpdGUgdW50dWsgYC9hcGkvKmAKICAyLiBDb21taXQgc2VtdWEgcGVydWJhaGFuIHRlcm1hc3VrIGZvbGRlciBgYXBpL2AgZGFuIGBzZXJ2ZXIvZGIuanNvbmAKICAzLiBSdW46IGB2ZXJjZWwgLS1wcm9kYAoKICAqKk5vdGUqKjogVGFucGEgU3VwYWJhc2UsIGRhdGEgaGFueWEgdGVyc2ltcGFuIHNlbGFtYSBkZXBsb3ltZW50LiBSZWJvb3QvcmVidWlsZCBha2FuIHJlc2V0IGRhdGEuCiAg",
+      "videoLink": null,
+      "puskesmas": "Mulia Hati 1",
+      "month": "Mei",
+      "year": "2026",
+      "documentType": "Fotocopy materi yang disampaikan",
+      "uploadedAt": "5/26/2026 8:51:52 AM",
+      "uploadedBy": null,
+      "createdAt": "2026-05-26T01:51:53.246Z"
+    },
+    {
+      "id": "134242335116294831",
+      "fileName": null,
+      "fileType": null,
+      "fileData": null,
+      "videoLink": null,
+      "puskesmas": "Mulia Hati 1",
+      "month": "Januari",
+      "year": "2025",
+      "documentType": "Fotocopy materi yang disampaikan",
+      "uploadedAt": "5/26/2026 8:45:11 AM",
+      "uploadedBy": null,
+      "createdAt": "2026-05-26T01:45:12.742Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "1",
+      "username": "tabita",
+      "password": "admin123",
+      "nama": "Tabita Antika",
+      "email": "tabita.antika@example.com",
+      "role": "Administrasi Klaim"
+    },
+    {
+      "id": "2",
+      "username": "kanaya",
+      "password": "dokter123",
+      "nama": "Kanaya Talita",
+      "email": "kanaya.talita@example.com",
+      "role": "Dokter"
+    },
+    {
+      "id": "3",
+      "username": "ferdyana",
+      "password": "dokter123",
+      "nama": "Ferdyana",
+      "email": "ferdyana@example.com",
+      "role": "Dokter"
+    }
+  ]
+}

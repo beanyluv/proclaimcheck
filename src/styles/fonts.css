@@ -1,0 +1,46 @@
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Mukta:wght@200;300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;700&display=swap');
+
+/* Font face declarations for backward compatibility */
+@font-face {
+  font-family: 'Mukta:Regular';
+  src: local('Mukta'), local('Mukta Regular');
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Mukta:Medium';
+  src: local('Mukta'), local('Mukta Medium');
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: 'Mukta:SemiBold';
+  src: local('Mukta'), local('Mukta SemiBold');
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: 'Mukta:Bold';
+  src: local('Mukta'), local('Mukta Bold');
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: 'Mukta:ExtraBold';
+  src: local('Mukta'), local('Mukta ExtraBold');
+  font-weight: 800;
+}
+
+@font-face {
+  font-family: 'Mukta:ExtraLight';
+  src: local('Mukta'), local('Mukta ExtraLight');
+  font-weight: 200;
+}
+
+@font-face {
+  font-family: 'Lexend:Bold';
+  src: local('Lexend'), local('Lexend Bold');
+  font-weight: 700;
+}
