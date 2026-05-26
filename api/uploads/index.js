@@ -18,12 +18,30 @@ export default async function handler(req, res) {
     try {
       if (isUsingSupabase()) {
         const supabase = getSupabase();
-        const { data, error } = await supabase
-          .from('uploads')
-          .select('*')
-          .order('createdAt', { ascending: false });
-        if (error) throw error;
-        return res.status(200).json(data || []);
+        try {
+          const { data, error } = await supabase
+            .from('uploads')
+            .select('*')
+            .order('createdAt', { ascending: false });
+          if (error) {
+            // If ordering by createdAt fails (column missing), retry without order
+            const msg = (error.message || '').toLowerCase();
+            if (msg.includes('column') && msg.includes('createdat')) {
+              const { data: data2, error: error2 } = await supabase
+                .from('uploads')
+                .select('*');
+              if (error2) throw error2;
+              return res.status(200).json(data2 || []);
+            }
+            throw error;
+          }
+          return res.status(200).json(data || []);
+        } catch (err) {
+          // Final fallback: try plain select
+          const { data, error } = await supabase.from('uploads').select('*');
+          if (error) throw error;
+          return res.status(200).json(data || []);
+        }
       } else {
         const db = await prepareDb();
         return res.status(200).json(db.data.uploads);
