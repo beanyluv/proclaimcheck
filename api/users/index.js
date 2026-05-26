@@ -18,11 +18,58 @@ export default async function handler(req, res) {
     try {
       if (isUsingSupabase()) {
         const supabase = getSupabase();
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('users')
           .select('*')
           .order('createdAt', { ascending: false });
-        if (error) throw error;
+
+        if (error) {
+          const msg = (error.message || '').toLowerCase();
+          if (msg.includes('createdat') || msg.includes('column') || msg.includes('does not exist')) {
+            const fallback = await supabase.from('users').select('*');
+            if (fallback.error) throw fallback.error;
+            data = fallback.data || [];
+          } else {
+            throw error;
+          }
+        }
+
+        // Auto-seed default users if database is empty
+        if (!data || data.length === 0) {
+          const defaultUsers = [
+            {
+              id: '1',
+              username: 'tabita',
+              password: 'admin123',
+              nama: 'Tabita Antika',
+              email: 'tabita.antika@example.com',
+              role: 'Administrasi Klaim',
+            },
+            {
+              id: '2',
+              username: 'kanaya',
+              password: 'dokter123',
+              nama: 'Kanaya Talita',
+              email: 'kanaya.talita@example.com',
+              role: 'Dokter',
+            },
+            {
+              id: '3',
+              username: 'ferdyana',
+              password: 'dokter123',
+              nama: 'Ferdyana',
+              email: 'ferdyana@example.com',
+              role: 'Dokter',
+            }
+          ];
+          const { error: seedError } = await supabase.from('users').insert(defaultUsers);
+          if (!seedError) {
+            return res.status(200).json(defaultUsers);
+          } else {
+            console.error('Auto-seed failed:', seedError.message);
+          }
+        }
+
         return res.status(200).json(data || []);
       } else {
         const db = await prepareDb();

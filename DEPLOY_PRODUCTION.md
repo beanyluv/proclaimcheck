@@ -42,10 +42,11 @@ Di Vercel dashboard (https://vercel.com):
 
 1. Pilih project **proclaim-check** (atau nama project kamu)
 2. Settings → **Environment Variables**
-3. Tambah 2 variable dari Supabase credentials:
+3. Tambah 3 variable dari Supabase credentials:
    ```
    VITE_SUPABASE_URL=https://xxxxx.supabase.co
    VITE_SUPABASE_ANON_KEY=eyJhbGc...
+   SUPABASE_SERVICE_ROLE=<service_role key dari Supabase>
    ```
 4. **Save** dan **Redeploy**
 

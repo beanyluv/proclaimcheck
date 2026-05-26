@@ -107,9 +107,10 @@ VITE_SUPABASE_ANON_KEY=eyJhbGc...xxxxx
 
 1. Buka project di Vercel dashboard
 2. Settings → **Environment Variables**
-3. Tambah dua variable:
+3. Tambah tiga variable:
    - **Key**: `VITE_SUPABASE_URL` → **Value**: `https://xxxxx.supabase.co`
    - **Key**: `VITE_SUPABASE_ANON_KEY` → **Value**: `eyJhbGc...xxxxx`
+   - **Key**: `SUPABASE_SERVICE_ROLE` → **Value**: `<service_role key dari Supabase>`
 4. Click **Save**
 5. Redeploy app
 
