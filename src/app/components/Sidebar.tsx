@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser, clearCurrentUser } from '../utils/userData';
 import Group284 from '../../imports/Group284/Group284';
@@ -18,7 +18,36 @@ interface SidebarProps {
 export default function Sidebar({ avatarSrc }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const currentUser = getCurrentUser();
+  const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setCurrentUser(getCurrentUser());
+      setPreviewAvatar(null);
+    };
+    const handlePreviewUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setPreviewAvatar(customEvent.detail);
+      }
+    };
+    window.addEventListener('profile-updated', handleUpdate);
+    window.addEventListener('settings-updated', handleUpdate);
+    window.addEventListener('profile-preview-updated', handlePreviewUpdate);
+    return () => {
+      window.removeEventListener('profile-updated', handleUpdate);
+      window.removeEventListener('settings-updated', handleUpdate);
+      window.removeEventListener('profile-preview-updated', handlePreviewUpdate);
+    };
+  }, []);
+
+  const name = currentUser?.nama || 'Pengguna';
+  const avatar = previewAvatar
+    ? previewAvatar
+    : (currentUser?.foto && currentUser.foto.startsWith('data:image/') && currentUser.foto.length > 100
+      ? currentUser.foto
+      : avatarSrc);
   const [searchQuery, setSearchQuery] = useState('');
   const [isVerifikasiExpanded, setIsVerifikasiExpanded] = useState(true);
   const [isPengaturanExpanded, setIsPengaturanExpanded] = useState(true);
@@ -30,12 +59,16 @@ export default function Sidebar({ avatarSrc }: SidebarProps) {
 
   const menuItems = [
     { path: '/beranda', label: 'Beranda' },
-    { path: '/laporan', label: 'Laporan' },
+    ...(currentUser?.role === 'Administrasi Klaim'
+      ? [
+          { path: '/laporan', label: 'Laporan' },
+        ]
+      : []),
     { path: '/riwayat', label: 'Riwayat' },
   ];
 
   const verifikasiChildren = [
-    { path: '/verifikasi-berkas', label: 'Lihat Berkas' },
+    { path: '/verifikasi-berkas', label: currentUser?.role === 'Petugas Puskesmas' ? 'Status Kelayakan' : 'Lihat Berkas' },
     { path: '/unggah-berkas', label: 'Unggah Berkas' },
   ];
 
@@ -120,11 +153,11 @@ export default function Sidebar({ avatarSrc }: SidebarProps) {
       <div className="p-4 border-b border-white border-opacity-10">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <img src={avatarSrc} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
+            <img src={avatar} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-white/20" />
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#37E320] rounded-full border-2 border-[#1f6f5f]" />
           </div>
           <div>
-            <p className="text-white font-['Mukta'] text-[15px] font-medium">{currentUser?.nama || 'Pengguna'}</p>
+            <p className="text-white font-['Mukta'] text-[15px] font-medium">{name}</p>
             <p className="text-white text-[11px] font-['Mukta'] opacity-80">Online</p>
           </div>
         </div>

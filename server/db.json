@@ -1,6 +1,24 @@
 {
   "uploads": [
     {
+      "id": "doc-test-1780297859729",
+      "fileName": "laporan_kegiatan.pdf",
+      "fileType": "application/pdf",
+      "fileData": "data:application/pdf;base64,JVBERi0xLjQKJ...",
+      "videoLink": null,
+      "puskesmas": "Mulia Hati 1",
+      "month": "April",
+      "year": "2026",
+      "documentType": "Laporan kegiatan edukasi/penyuluhan & senam Prolanis",
+      "uploadedAt": "01 Juni 2026 pukul 12.13 WIB",
+      "uploadedBy": "Tabita Antika",
+      "status": null,
+      "keterangan": null,
+      "analysis": null,
+      "lastModified": null,
+      "modifiedBy": null
+    },
+    {
       "id": "134242339126505386",
       "fileName": "README.md",
       "fileType": "text/markdown",
@@ -37,22 +55,33 @@
       "nama": "Tabita Antika",
       "email": "tabita.antika@example.com",
       "role": "Administrasi Klaim"
-    },
+    }
+  ],
+  "messages": [
     {
-      "id": "2",
-      "username": "kanaya",
-      "password": "puskesmas123",
-      "nama": "Kanaya Talita",
-      "email": "kanaya.talita@example.com",
-      "role": "Petugas Puskesmas"
-    },
+      "id": "msg-api-test-1780137764328",
+      "from": "Kanaya Talitakamta",
+      "to": "Administrasi Klaim",
+      "subject": "Halo dari test API",
+      "body": "Ini adalah body pesan test.",
+      "timestamp": "30 Mei 2026, 14.40",
+      "isRead": false,
+      "direction": "sent",
+      "puskesmas": "Mulia Hati 1"
+    }
+  ],
+  "riwayat": [
     {
-      "id": "3",
-      "username": "ferdyana",
-      "password": "puskesmas123",
-      "nama": "Ferdyana",
-      "email": "ferdyana@example.com",
-      "role": "Petugas Puskesmas"
+      "id": "riwayat-test-1780285707142",
+      "waktu": "01 Juni 2026, 10.45 WIB",
+      "username": "petugas.muliahati1",
+      "user": "Petugas Mulia Hati 1",
+      "role": "Petugas Puskesmas",
+      "action": "Upload",
+      "kategori": "Unggah Berkas",
+      "pesan": "Mengunggah Laporan kegiatan edukasi/penyuluhan & senam Prolanis untuk Mulia Hati 1, Februari 2025",
+      "docId": "doc12345",
+      "puskesmas": "Mulia Hati 1"
     }
   ]
 }

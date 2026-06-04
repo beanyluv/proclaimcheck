@@ -1,4 +1,5 @@
-import { prepareDb } from '../_db.js';
+import { prepareDb, isUsingSupabase, mapUploadFromDb } from '../_db.js';
+import { getSupabase } from '../supabase.js';
 
 const setCors = (res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,12 +15,27 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const db = await prepareDb();
-    const upload = db.data.uploads.find((item) => item.id === req.query.id);
-    if (!upload) {
-      return res.status(404).json({ error: 'Upload not found' });
+    try {
+      if (isUsingSupabase()) {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.from('uploads').select('*').eq('id', req.query.id).maybeSingle();
+        if (error) throw error;
+        if (!data) {
+          return res.status(404).json({ error: 'Upload not found' });
+        }
+        return res.status(200).json(mapUploadFromDb(data));
+      } else {
+        const db = await prepareDb();
+        const upload = db.data.uploads.find((item) => item.id === req.query.id);
+        if (!upload) {
+          return res.status(404).json({ error: 'Upload not found' });
+        }
+        return res.status(200).json(upload);
+      }
+    } catch (error) {
+      console.error('GET /api/uploads/:id error:', error.message);
+      return res.status(500).json({ error: error.message || 'Server error' });
     }
-    return res.status(200).json(upload);
   }
 
   res.setHeader('Allow', 'GET,OPTIONS');

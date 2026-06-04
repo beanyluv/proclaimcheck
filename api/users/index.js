@@ -1,5 +1,6 @@
 import { prepareDb, saveDb, isUsingSupabase } from '../_db.js';
 import { getSupabase } from '../supabase.js';
+import bcrypt from 'bcryptjs';
 
 const setCors = (res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,10 +19,11 @@ export default async function handler(req, res) {
     try {
       if (isUsingSupabase()) {
         const supabase = getSupabase();
+
         let { data, error } = await supabase
           .from('users')
           .select('*')
-          .order('createdAt', { ascending: false });
+          .order('createdat', { ascending: false });
 
         if (error) {
           const msg = (error.message || '').toLowerCase();
@@ -44,22 +46,6 @@ export default async function handler(req, res) {
               nama: 'Tabita Antika',
               email: 'tabita.antika@example.com',
               role: 'Administrasi Klaim',
-            },
-            {
-              id: '2',
-              username: 'kanaya',
-              password: 'puskesmas123',
-              nama: 'Kanaya Talita',
-              email: 'kanaya.talita@example.com',
-              role: 'Petugas Puskesmas',
-            },
-            {
-              id: '3',
-              username: 'ferdyana',
-              password: 'puskesmas123',
-              nama: 'Ferdyana',
-              email: 'ferdyana@example.com',
-              role: 'Petugas Puskesmas',
             }
           ];
           const { error: seedError } = await supabase.from('users').insert(defaultUsers);
@@ -67,6 +53,8 @@ export default async function handler(req, res) {
             return res.status(200).json(defaultUsers);
           } else {
             console.error('Auto-seed failed:', seedError.message);
+            // Fallback: return defaultUsers so frontend has default accounts even if seed failed
+            return res.status(200).json(defaultUsers);
           }
         }
 
@@ -82,12 +70,13 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { id, username, password, nama, email, role, foto } = req.body;
+    const { id, username, password, nama, email, role, foto, puskesmas } = req.body;
     if (!username || !password || !nama || !role) {
       return res.status(400).json({ error: 'Missing required user fields' });
     }
 
     try {
+      const hashedPassword = password.startsWith('$2') ? password : bcrypt.hashSync(password, 10);
       if (isUsingSupabase()) {
         const supabase = getSupabase();
         const { data: existing } = await supabase
@@ -95,8 +84,7 @@ export default async function handler(req, res) {
           .select('id')
           .eq('username', username)
           .neq('id', id || 'null')
-          .single()
-          .catch(() => ({ data: null }));
+          .maybeSingle();
         if (existing) {
           return res.status(400).json({ error: 'Username sudah digunakan' });
         }
@@ -105,11 +93,12 @@ export default async function handler(req, res) {
         const newUser = {
           id: userId,
           username,
-          password,
+          password: hashedPassword,
           nama,
           email: email || '',
           role,
           foto: foto || '',
+          puskesmas: puskesmas || '',
         };
 
         const { data, error } = await supabase
@@ -129,11 +118,12 @@ export default async function handler(req, res) {
         const newUser = {
           id: userId,
           username,
-          password,
+          password: hashedPassword,
           nama,
           email: email || '',
           role,
           foto: foto || '',
+          puskesmas: puskesmas || '',
         };
 
         users.push(newUser);

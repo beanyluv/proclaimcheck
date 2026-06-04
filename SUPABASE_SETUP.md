@@ -30,25 +30,29 @@ Setelah project siap:
 ### SQL Schema
 
 ```sql
--- Create uploads table
-CREATE TABLE uploads (
+-- 1. Create uploads table (with all necessary columns)
+CREATE TABLE IF NOT EXISTS uploads (
   id TEXT PRIMARY KEY,
-  fileName TEXT,
-  fileType TEXT,
-  fileData TEXT,
-  videoLink TEXT,
+  filename TEXT,
+  filetype TEXT,
+  filedata TEXT,
+  videolink TEXT,
   puskesmas TEXT NOT NULL,
   month TEXT NOT NULL,
   year TEXT NOT NULL,
-  documentType TEXT NOT NULL,
-  uploadedAt TEXT NOT NULL,
-  uploadedBy TEXT,
-  createdAt TIMESTAMP DEFAULT NOW(),
-  updatedAt TIMESTAMP DEFAULT NOW()
+  documenttype TEXT NOT NULL,
+  uploadedat TEXT NOT NULL,
+  uploadedby TEXT,
+  status TEXT,
+  keterangan TEXT,
+  analysis TEXT,
+  lastmodified TEXT,
+  modifiedby TEXT,
+  createdat TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create users table
-CREATE TABLE users (
+-- 2. Create users table
+CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
@@ -56,34 +60,66 @@ CREATE TABLE users (
   email TEXT,
   role TEXT NOT NULL,
   foto TEXT,
-  createdAt TIMESTAMP DEFAULT NOW(),
-  updatedAt TIMESTAMP DEFAULT NOW()
+  puskesmas TEXT,
+  createdat TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Create riwayat table
+CREATE TABLE IF NOT EXISTS riwayat (
+  id TEXT PRIMARY KEY,
+  waktu TEXT NOT NULL,
+  username TEXT NOT NULL,
+  user_nama TEXT NOT NULL,
+  role TEXT NOT NULL,
+  action TEXT NOT NULL,
+  kategori TEXT NOT NULL,
+  pesan TEXT NOT NULL,
+  docid TEXT,
+  puskesmas TEXT,
+  createdat TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes untuk query cepat
-CREATE INDEX idx_uploads_puskesmas ON uploads(puskesmas);
-CREATE INDEX idx_uploads_year_month ON uploads(year, month);
-CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_uploads_puskesmas ON uploads(puskesmas);
+CREATE INDEX IF NOT EXISTS idx_uploads_year_month ON uploads(year, month);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_riwayat_username ON riwayat(username);
 ```
 
 4. Jalankan query dengan click tombol **Run** atau Ctrl+Enter
 
-## 4. Enable Row Level Security (RLS) - Optional tapi recommended
+## 4. Enable Row Level Security (RLS) & Policies
 
-Di **Authentication → Policies**, enable RLS untuk public access:
+Jika kamu ingin mengaktifkan keamanan (RLS) di Supabase, jalankan script ini. Jika kamu memilih **Tanpa RLS** (Without RLS), kamu bisa mematikan RLS untuk semua table (lihat opsi B).
 
+### OPSI A: Menggunakan RLS (Dengan Keamanan Terbuka / Public Access)
 ```sql
--- Allow public read access to uploads
+-- Allow public read/write access to uploads
 ALTER TABLE uploads ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read" ON uploads FOR SELECT USING (true);
 CREATE POLICY "Allow public insert" ON uploads FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update" ON uploads FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete" ON uploads FOR DELETE USING (true);
 
--- Allow public read/write to users (simple setup)
+-- Allow public read/write/update to users
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read" ON users FOR SELECT USING (true);
 CREATE POLICY "Allow public insert" ON users FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update" ON users FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete" ON users FOR DELETE USING (true);
+
+-- Allow public read/insert to riwayat
+ALTER TABLE riwayat ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON riwayat FOR SELECT USING (true);
+CREATE POLICY "Allow public insert" ON riwayat FOR INSERT WITH CHECK (true);
+```
+
+### OPSI B: Tanpa RLS (Without RLS - Lebih Simple / Direkomendasikan)
+Jika ingin mematikan RLS sepenuhnya agar data bisa diakses tanpa aturan policy:
+```sql
+ALTER TABLE uploads DISABLE ROW LEVEL SECURITY;
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE riwayat DISABLE ROW LEVEL SECURITY;
 ```
 
 ## 5. Get credentials
@@ -173,6 +209,7 @@ Jika ada data di `server/db.json`, import ke Supabase:
 | email | TEXT | Yes |
 | role | TEXT | No |
 | foto | TEXT | Yes |
+| puskesmas | TEXT | Yes |
 | createdAt | TIMESTAMP | Yes (default NOW) |
 | updatedAt | TIMESTAMP | Yes (default NOW) |
 

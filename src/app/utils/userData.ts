@@ -1,3 +1,5 @@
+import bcrypt from 'bcryptjs';
+
 export interface User {
   id: string;
   username: string;
@@ -6,9 +8,10 @@ export interface User {
   email: string;
   role: string;
   foto?: string;
+  puskesmas?: string;
 }
 
-// Default users for demo
+// user default buat demo
 const defaultUsers: User[] = [
   {
     id: '1',
@@ -18,85 +21,107 @@ const defaultUsers: User[] = [
     email: 'tabita.antika@example.com',
     role: 'Administrasi Klaim',
   },
-  {
-    id: '2',
-    username: 'kanaya',
-    password: 'puskesmas123',
-    nama: 'Kanaya Talita',
-    email: 'kanaya.talita@example.com',
-    role: 'Petugas Puskesmas',
-  },
-  {
-    id: '3',
-    username: 'ferdyana',
-    password: 'puskesmas123',
-    nama: 'Ferdyana',
-    email: 'ferdyana@example.com',
-    role: 'Petugas Puskesmas',
-  },
 ];
 
-// Initialize users in localStorage if not exists
+let cachedUsers: User[] = [...defaultUsers];
+
+// init user
 export const initializeUsers = () => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('users');
-    if (!stored) {
-      localStorage.setItem('users', JSON.stringify(defaultUsers));
-    }
-  }
+  // in-memory only, ga pake localstorage lagi buat list
 };
 
-// Get all users
+// ambil semua user
 export const getUsers = (): User[] => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('users');
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  }
-  return defaultUsers;
+  return cachedUsers;
 };
 
-// Save all users
+// simpan user
 export const saveUsers = (users: User[]) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('users', JSON.stringify(users));
-  }
+  cachedUsers = users;
 };
 
-// Validate login credentials
+// validasi login
 export const validateLogin = (username: string, password: string): User | null => {
   const users = getUsers();
-  const user = users.find((u) => u.username === username && u.password === password);
-  return user || null;
-};
-
-// Get current logged in user
-export const getCurrentUser = (): User | null => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('currentUser');
-    if (stored) {
-      return JSON.parse(stored);
+  const user = users.find((u) => u.username === username);
+  if (user) {
+    const isMatch = user.password === password || (user.password.startsWith('$2') && bcrypt.compareSync(password, user.password));
+    if (isMatch) {
+      return user;
     }
   }
   return null;
 };
 
-// Set current logged in user
-export const setCurrentUser = (user: User) => {
+// update waktu aktivitas session
+export const updateSessionActivity = () => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('currentUser', JSON.stringify(user));
+    localStorage.setItem('session-last-active', Date.now().toString());
   }
 };
 
-// Clear current user (logout)
+// get user login aktif + cek expired session
+export const getCurrentUser = (): User | null => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('currentUser');
+    if (stored) {
+      // session expired limit: 2 jam
+      const lastActive = localStorage.getItem('session-last-active');
+      const now = Date.now();
+      const EXPIRE_LIMIT = 7200000; 
+
+      if (lastActive && now - parseInt(lastActive, 10) > EXPIRE_LIMIT) {
+        clearCurrentUser();
+        // trigger logout di app
+        window.dispatchEvent(new CustomEvent('user-logout', { detail: { reason: 'session_expired' } }));
+        return null;
+      }
+
+      const user = JSON.parse(stored);
+      const isRealFoto = user.foto && user.foto.startsWith('data:image/') && user.foto.length > 100;
+      if (!isRealFoto && user.username) {
+        const cachedPhoto = localStorage.getItem(`profile-photo-${user.username.toLowerCase()}`);
+        if (cachedPhoto && cachedPhoto.startsWith('data:image/') && cachedPhoto.length > 100) {
+          user.foto = cachedPhoto;
+        }
+      }
+      return user;
+    }
+  }
+  return null;
+};
+
+// set user login aktif
+export const setCurrentUser = (user: User) => {
+  if (typeof window !== 'undefined') {
+    const isRealFoto = user.foto && user.foto.startsWith('data:image/') && user.foto.length > 100;
+    if (!isRealFoto && user.username) {
+      const cachedPhoto = localStorage.getItem(`profile-photo-${user.username.toLowerCase()}`);
+      if (cachedPhoto && cachedPhoto.startsWith('data:image/') && cachedPhoto.length > 100) {
+        user.foto = cachedPhoto;
+      }
+    }
+    
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    localStorage.setItem('session-login-time', Date.now().toString());
+    localStorage.setItem('session-last-active', Date.now().toString());
+    
+    if (isRealFoto && user.username) {
+      localStorage.setItem(`profile-photo-${user.username.toLowerCase()}`, user.foto!);
+    }
+  }
+};
+
+// hapus session (logout)
 export const clearCurrentUser = () => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('session-login-time');
+    localStorage.removeItem('session-last-active');
   }
 };
 
-// Update user profile
+// update profil
 export const updateUserProfile = (userId: string, updates: Partial<User>): boolean => {
   const users = getUsers();
   const userIndex = users.findIndex((u) => u.id === userId);
@@ -108,7 +133,7 @@ export const updateUserProfile = (userId: string, updates: Partial<User>): boole
   users[userIndex] = { ...users[userIndex], ...updates };
   saveUsers(users);
 
-  // Update current user if it's the same user
+  // sync session kalo user yg sama
   const currentUser = getCurrentUser();
   if (currentUser && currentUser.id === userId) {
     setCurrentUser(users[userIndex]);
@@ -117,7 +142,7 @@ export const updateUserProfile = (userId: string, updates: Partial<User>): boole
   return true;
 };
 
-// Change password
+// ganti pass
 export const changePassword = (userId: string, oldPassword: string, newPassword: string): { success: boolean; message: string } => {
   const users = getUsers();
   const user = users.find((u) => u.id === userId);

@@ -1,24 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import imgImage3 from '../../imports/RiwayatProclaimCheck/ecd5bb1c63617aeaceefdae80e49afd2e592d178.png';
-import Sidebar from '../components/Sidebar';
-import TopBar from '../components/TopBar';
-import Group284 from "../../imports/Group284/Group284";
-import { getRiwayatList } from '../utils/documentData';
+import { getRiwayatList, syncRiwayat } from '../utils/documentData';
 import { getCurrentUser } from '../utils/userData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 
 export default function RiwayatPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const isActive = (path: string) => location.pathname === path;
   const currentUser = getCurrentUser();
-  const userOptions = Array.from(new Set([
-    currentUser?.nama,
-    'Tabita Antika',
-    'Kanaya Talita',
-    'Ferdyana',
-  ].filter(Boolean)));
+
   const [filterUser, setFilterUser] = useState('Pengguna');
   const [filterRole, setFilterRole] = useState('Peran');
   const [filterKegiatan, setFilterKegiatan] = useState('Kegiatan');
@@ -31,31 +21,105 @@ export default function RiwayatPage() {
   const [isVerifikasiExpanded, setIsVerifikasiExpanded] = useState(true);
   const [riwayatData, setRiwayatData] = useState<any[]>([]);
 
-  // Load riwayat dari localStorage dan update setiap 2 detik
   useEffect(() => {
-    const loadRiwayat = () => {
-      const data = getRiwayatList();
-      setRiwayatData(data);
+    const user = getCurrentUser();
+    if (!user) {
+      navigate('/');
+      return;
+    }
+  }, [navigate]);
+
+  // Load riwayat dari server dan update secara real-time (setiap 5 detik)
+  useEffect(() => {
+    const loadRiwayat = async () => {
+      try {
+        const data = await syncRiwayat();
+        setRiwayatData(data);
+      } catch (err) {
+        console.error('Gagal memuat riwayat:', err);
+        setRiwayatData(getRiwayatList());
+      }
     };
     loadRiwayat();
-    const interval = setInterval(loadRiwayat, 2000);
+    const interval = setInterval(loadRiwayat, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Filter data based on selected filters
-  const filteredData = riwayatData.filter(item => {
+  // Helper untuk normalisasi Puskesmas
+  const normalizePuskesmas = (name: string | null | undefined) => {
+    if (!name) return '';
+    return name.replace(/^Puskesmas\s+/i, '').trim().toLowerCase();
+  };
+
+  // Terapkan aturan visibilitas berbasis role & faskes sesuai request user
+  const allowedRiwayatData = riwayatData.filter(item => {
+    if (!currentUser) return false;
+    
+    // Admin Klaim (Administrasi Klaim) hanya bisa melihat riwayat aktivitas sesama akun Administrasi Klaim
+    if (currentUser.role === 'Administrasi Klaim') {
+      const itemRole = item.role || '';
+      return itemRole === 'Administrasi Klaim';
+    }
+    
+    // Petugas Puskesmas hanya bisa melihat dirinya dan akun lain yang role Petugas Puskesmas yang terdaftar di Puskesmas yang sama
+    if (currentUser.role === 'Petugas Puskesmas') {
+      const itemRole = item.role || '';
+      const itemPuskesmas = item.puskesmas || '';
+      
+      const matchRole = itemRole === 'Petugas Puskesmas';
+      const matchPuskesmas = normalizePuskesmas(itemPuskesmas) === normalizePuskesmas(currentUser.puskesmas);
+      
+      return matchRole && matchPuskesmas;
+    }
+    
+    return false;
+  });
+
+  // Ambil pilihan nama user secara dinamis dari log yang diperbolehkan untuk menjaga privasi
+  const userOptions = Array.from(new Set(
+    allowedRiwayatData.map(item => item.user).filter(Boolean)
+  ));
+
+  // Saring data berdasarkan input filter interaktif di atas dataset yang aman (allowedRiwayatData)
+  const filteredData = allowedRiwayatData.filter(item => {
     const matchUser = filterUser === 'Pengguna' || item.user === filterUser;
     const matchRole = filterRole === 'Peran' || item.role === filterRole;
     const matchKegiatan = filterKegiatan === 'Kegiatan' || item.action === filterKegiatan;
-    const matchSearch = searchQuery === '' ||
-      item.waktu.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.pesan.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.kategori.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Filter jangka waktu menggunakan timestamp dari item.id (Date.now() + random)
+    let matchWaktu = true;
+    if (filterWaktu !== 'Jangka Waktu' && item.id) {
+      const logTimestamp = Number(item.id.substring(0, 13));
+      if (!isNaN(logTimestamp)) {
+        const now = Date.now();
+        const diffMs = now - logTimestamp;
+        if (filterWaktu === 'Hari Ini') {
+          matchWaktu = diffMs <= 24 * 60 * 60 * 1000;
+        } else if (filterWaktu === 'Minggu Ini') {
+          matchWaktu = diffMs <= 7 * 24 * 60 * 60 * 1000;
+        } else if (filterWaktu === 'Bulan Ini') {
+          matchWaktu = diffMs <= 30 * 24 * 60 * 60 * 1000;
+        }
+      }
+    }
+    
+    const itemWaktu = (item.waktu || '').toLowerCase();
+    const itemUser = (item.user || '').toLowerCase();
+    const itemRole = (item.role || '').toLowerCase();
+    const itemAction = (item.action || '').toLowerCase();
+    const itemPesan = (item.pesan || '').toLowerCase();
+    const itemKategori = (item.kategori || '').toLowerCase();
+    const term = searchQuery.toLowerCase();
 
-    return matchUser && matchRole && matchKegiatan && matchSearch;
+    const matchSearch = searchQuery === '' ||
+      itemWaktu.includes(term) ||
+      itemUser.includes(term) ||
+      itemRole.includes(term) ||
+      itemAction.includes(term) ||
+      itemPesan.includes(term) ||
+      itemKategori.includes(term);
+
+    return matchUser && matchRole && matchKegiatan && matchWaktu && matchSearch;
   });
 
   // --- Saved queries logic ---
@@ -174,16 +238,7 @@ export default function RiwayatPage() {
   }, [isSaveModalOpen, editingIndex]);
 
   return (
-    <div className="flex h-screen bg-white">
-      {/* Sidebar */}
-      <Sidebar avatarSrc={imgImage3} />
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar title="Aktivitas Masuk" avatarSrc={imgImage3} />
-
-        {/* Content Area */}
-        <div className="flex-1 bg-[#eee] bg-opacity-70 overflow-y-auto p-6">
+    <>
           {/* Action Buttons */}
           <div className="flex items-center gap-3 mb-4">
             <button onClick={() => handleNewQuery() } className="font-['Mukta'] text-[15px] text-black hover:underline">
@@ -261,6 +316,8 @@ export default function RiwayatPage() {
             >
               <option>Kegiatan</option>
               <option>Masuk</option>
+              <option>Unggah</option>
+              <option>Analisis</option>
               <option>Update</option>
               <option>Delete</option>
               <option>View</option>
@@ -315,8 +372,8 @@ export default function RiwayatPage() {
                 className="border-b border-gray-200 flex py-3 px-4 gap-3 hover:bg-gray-50 transition-colors"
               >
                 <div className="w-36 flex flex-col justify-center">
-                  <span className="font-['Mukta'] text-[13px] text-black">{item.waktu.split(', ')[0]}</span>
-                  <span className="font-['Mukta'] text-[12px] text-gray-600">{item.waktu.split(', ')[1] ?? ''}</span>
+                  <span className="font-['Mukta'] text-[13px] text-black">{(item.waktu || '').split(', ')[0]}</span>
+                  <span className="font-['Mukta'] text-[12px] text-gray-600">{(item.waktu || '').split(', ')[1] ?? ''}</span>
                 </div>
                 <div className="w-32 flex items-center">
                   <span className="font-['Mukta'] text-[13px] text-black truncate">{item.user}</span>
@@ -337,8 +394,6 @@ export default function RiwayatPage() {
               ))
             )}
           </div>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

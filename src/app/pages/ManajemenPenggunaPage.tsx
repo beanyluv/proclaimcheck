@@ -1,21 +1,31 @@
-// ManajemenPenggunaPage.tsx — Letakkan di src/app/pages/ManajemenPenggunaPage.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import imgImage3 from '../../imports/VerifikasiBerkasProclaimCheck-1/ecd5bb1c63617aeaceefdae80e49afd2e592d178.png';
-import Group284 from "../../imports/Group284/Group284";
-import Sidebar from '../components/Sidebar';
-import TopBar from '../components/TopBar';
 import { getUsers, saveUsers, getCurrentUser } from '../utils/userData';
 import { getUsersFromServer, createUserOnServer, updateUserOnServer, deleteUserOnServer } from '../utils/serverApi';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 
-interface User { id: string; username: string; password: string; nama: string; email: string; role: string; foto?: string; }
+interface User { id: string; username: string; password: string; nama: string; email: string; role: string; foto?: string; puskesmas?: string; }
 
 const ROLES = ['Administrasi Klaim', 'Petugas Puskesmas'];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   'Administrasi Klaim': ['Beranda', 'Verifikasi Berkas', 'Laporan', 'Riwayat', 'Pengaturan'],
   'Petugas Puskesmas': ['Beranda', 'Unggah Berkas'],
 };
+
+const PUSKESMAS_LIST = [
+  'Puskesmas Mulia Hati 1',
+  'Puskesmas Mulia Hati 2',
+  'Puskesmas Budi Mulia 1',
+  'Puskesmas Budi Mulia 2',
+  'Puskesmas Harapan Kasih 1',
+  'Puskesmas Harapan Kasih 2',
+  'Puskesmas Sentosa 1',
+  'Puskesmas Sentosa 2',
+  'Puskesmas Citra Medika 1',
+  'Puskesmas Citra Medika 2',
+  'Puskesmas Sehat Mandiri 1',
+  'Puskesmas Sehat Mandiri 2',
+];
 
 export default function ManajemenPenggunaPage() {
   const navigate = useNavigate();
@@ -28,7 +38,7 @@ export default function ManajemenPenggunaPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [form, setForm] = useState({ nama: '', username: '', email: '', password: '', role: 'Petugas Puskesmas' });
+  const [form, setForm] = useState({ nama: '', username: '', email: '', password: '', role: 'Petugas Puskesmas', puskesmas: '' });
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -64,6 +74,7 @@ export default function ManajemenPenggunaPage() {
 
   const handleSave = async () => {
     if (!form.nama || !form.username || !form.role) { showMsg('Harap isi nama, username, dan role', 'error'); return; }
+    if (form.role === 'Petugas Puskesmas' && !form.puskesmas) { showMsg('Harap pilih Puskesmas untuk Petugas Puskesmas', 'error'); return; }
     if (!editUser && !form.password) { showMsg('Password wajib diisi untuk pengguna baru', 'error'); return; }
 
     try {
@@ -76,20 +87,15 @@ export default function ManajemenPenggunaPage() {
           email: form.email,
           password: form.password,
           role: form.role,
+          puskesmas: form.role === 'Petugas Puskesmas' ? form.puskesmas : undefined,
         };
         
         let created;
         try {
           created = await createUserOnServer(newUser);
-        } catch (serverErr) {
-          console.warn('Gagal menambah ke server, fallback ke local storage', serverErr);
-          const localUsers = getUsers();
-          const exists = localUsers.some(u => u.username === newUser.username);
-          if (exists) throw new Error('Username sudah digunakan');
-          localUsers.push(newUser);
-          saveUsers(localUsers);
-          created = newUser;
-          showMsg(`Pengguna "${form.nama}" ditambahkan ke penyimpanan lokal`, 'success');
+        } catch (serverErr: any) {
+          console.error('Gagal menambah pengguna ke database cloud Supabase:', serverErr);
+          throw new Error(serverErr?.message || 'Gagal terhubung ke database cloud Supabase');
         }
 
         const updated = [...users, created];
@@ -101,26 +107,15 @@ export default function ManajemenPenggunaPage() {
           nama: form.nama,
           email: form.email,
           role: form.role,
+          puskesmas: form.role === 'Petugas Puskesmas' ? form.puskesmas : undefined,
         };
 
         let updatedUser;
         try {
           updatedUser = await updateUserOnServer(editUser.id, updatedFields);
-        } catch (serverErr) {
-          console.warn('Gagal update ke server, fallback ke local storage', serverErr);
-          const localUsers = getUsers().map(u => {
-            if (u.id === editUser.id) {
-              return {
-                ...u,
-                ...updatedFields,
-                password: form.password ? form.password : u.password
-              };
-            }
-            return u;
-          });
-          saveUsers(localUsers);
-          updatedUser = localUsers.find(u => u.id === editUser.id);
-          showMsg(`Pengguna "${form.nama}" diperbarui secara lokal`, 'success');
+        } catch (serverErr: any) {
+          console.error('Gagal memperbarui pengguna di database cloud Supabase:', serverErr);
+          throw new Error(serverErr?.message || 'Gagal terhubung ke database cloud Supabase');
         }
 
         const updated = users.map(u => u.id === editUser.id ? updatedUser : u);
@@ -133,12 +128,12 @@ export default function ManajemenPenggunaPage() {
 
     setShowForm(false);
     setEditUser(null);
-    setForm({ nama: '', username: '', email: '', password: '', role: 'Petugas Puskesmas' });
+    setForm({ nama: '', username: '', email: '', password: '', role: 'Petugas Puskesmas', puskesmas: '' });
   };
 
   const handleEdit = (user: User) => {
     setEditUser(user);
-    setForm({ nama: user.nama, username: user.username, email: user.email, password: '', role: user.role });
+    setForm({ nama: user.nama, username: user.username, email: user.email, password: '', role: user.role, puskesmas: user.puskesmas || '' });
     setShowForm(true);
   };
 
@@ -148,12 +143,11 @@ export default function ManajemenPenggunaPage() {
       try {
         await deleteUserOnServer(id);
         showMsg('Pengguna berhasil dihapus');
-      } catch (serverErr) {
-        console.warn('Gagal menghapus dari server, fallback ke local storage', serverErr);
-        const localUsers = getUsers().filter(u => u.id !== id);
-        saveUsers(localUsers);
-        showMsg('Pengguna berhasil dihapus dari penyimpanan lokal');
+      } catch (serverErr: any) {
+        console.error('Gagal menghapus pengguna dari database cloud Supabase:', serverErr);
+        throw new Error(serverErr?.message || 'Gagal terhubung ke database cloud Supabase');
       }
+
       const updated = users.filter(u => u.id !== id);
       setUsers(updated);
       setDeleteConfirm(null);
@@ -178,14 +172,7 @@ export default function ManajemenPenggunaPage() {
   );
 
   return (
-    <div className="flex h-screen bg-white">
-      {/* Sidebar */}
-      <Sidebar avatarSrc={imgImage3} />
-
-      {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar title="Manajemen Pengguna" avatarSrc={imgImage3} userName={currentUser?.nama} />
-        <div className="flex-1 bg-[#eee] bg-opacity-70 overflow-y-auto p-6">
+    <>
           {msg && (
             <div className={`mb-4 p-4 rounded-lg border flex items-center gap-3 ${msgType === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
               <p className={`font-['Mukta'] text-[14px] ${msgType === 'success' ? 'text-green-700' : 'text-red-700'}`}>{msg}</p>
@@ -218,7 +205,12 @@ export default function ManajemenPenggunaPage() {
                         <div className="w-8 h-8 rounded-full bg-[#1f6f5f] flex items-center justify-center flex-shrink-0">
                           <span className="text-white text-[12px] font-bold">{user.nama.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</span>
                         </div>
-                        <span className="font-['Mukta'] text-[14px] font-medium text-[#1a4a43]">{user.nama}</span>
+                        <div className="flex flex-col">
+                          <span className="font-['Mukta'] text-[14px] font-medium text-[#1a4a43]">{user.nama}</span>
+                          {user.role === 'Petugas Puskesmas' && user.puskesmas && (
+                            <span className="text-[11px] text-[#5f9990] font-light">{user.puskesmas}</span>
+                          )}
+                        </div>
                         {user.id === currentUser?.id && <span className="text-[10px] bg-[#e0f2ef] text-[#1a5c52] px-2 py-0.5 rounded-full font-medium">Anda</span>}
                       </div>
                     </td>
@@ -291,8 +283,6 @@ export default function ManajemenPenggunaPage() {
               </table>
             </div>
           </div>
-        </div>
-      </div>
 
       {/* Form Modal - converted to Dialog for UI consistency */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
@@ -322,7 +312,7 @@ export default function ManajemenPenggunaPage() {
             ))}
             <div>
               <label className="block font-['Mukta'] text-[13px] font-medium text-[#1a4a43] mb-1.5">Role *</label>
-              <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}
+              <select value={form.role} onChange={e => setForm({...form, role: e.target.value, puskesmas: e.target.value === 'Petugas Puskesmas' ? form.puskesmas : ''})}
                 className="w-full border border-[#d0e2de] rounded-lg px-4 py-2.5 font-['Mukta'] text-[14px] focus:outline-none focus:border-[#1f6f5f] bg-white">
                 {ROLES.map(r => <option key={r}>{r}</option>)}
               </select>
@@ -330,6 +320,16 @@ export default function ManajemenPenggunaPage() {
                 Akses: {(ROLE_PERMISSIONS[form.role] || []).join(', ')}
               </p>
             </div>
+            {form.role === 'Petugas Puskesmas' && (
+              <div>
+                <label className="block font-['Mukta'] text-[13px] font-medium text-[#1a4a43] mb-1.5">Pilih Puskesmas *</label>
+                <select value={form.puskesmas} onChange={e => setForm({...form, puskesmas: e.target.value})}
+                  className="w-full border border-[#d0e2de] rounded-lg px-4 py-2.5 font-['Mukta'] text-[14px] focus:outline-none focus:border-[#1f6f5f] bg-white">
+                  <option value="">-- Pilih Puskesmas --</option>
+                  {PUSKESMAS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <button onClick={() => setShowForm(false)} className="flex-1 py-2.5 border border-[#d0e2de] rounded-lg font-['Mukta'] text-[14px] text-[#5f9990] hover:bg-gray-50 transition-colors">Batal</button>
@@ -353,6 +353,6 @@ export default function ManajemenPenggunaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

@@ -97,26 +97,23 @@ const safeParse = <T>(value: string | null, fallback: T): T => {
   }
 };
 
+let cachedMessages: MessageItem[] = [...initialMessages];
+let cachedNotifications: NotificationItem[] = [...initialNotifications];
+
 export const getMessages = (): MessageItem[] => {
-  if (typeof window === 'undefined') return initialMessages;
-  const stored = localStorage.getItem(MESSAGES_KEY);
-  return safeParse<MessageItem[]>(stored, initialMessages);
+  return cachedMessages;
 };
 
 export const saveMessages = (messages: MessageItem[]) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages));
+  cachedMessages = messages;
 };
 
 export const getNotifications = (): NotificationItem[] => {
-  if (typeof window === 'undefined') return initialNotifications;
-  const stored = localStorage.getItem(NOTIFICATIONS_KEY);
-  return safeParse<NotificationItem[]>(stored, initialNotifications);
+  return cachedNotifications;
 };
 
 export const saveNotifications = (notifications: NotificationItem[]) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+  cachedNotifications = notifications;
 };
 
 export const addMessage = (message: MessageItem) => {

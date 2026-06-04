@@ -1,4 +1,4 @@
-import { prepareDb, saveDb, isUsingSupabase, getLocalDb } from '../_db.js';
+import { prepareDb, saveDb, isUsingSupabase, getLocalDb, mapUploadToDb, mapUploadFromDb } from '../_db.js';
 import { getSupabase } from '../supabase.js';
 
 const setCors = (res) => {
@@ -19,39 +19,48 @@ export default async function handler(req, res) {
       if (isUsingSupabase()) {
         const supabase = getSupabase();
         try {
-          const { data, error } = await supabase
-            .from('uploads')
-            .select('*')
-            .order('createdAt', { ascending: false });
-          if (error) {
-            // If ordering by createdAt fails (column missing), retry without order
-            const msg = (error.message || '').toLowerCase();
-            if (msg.includes('column') && msg.includes('createdat')) {
-              const { data: data2, error: error2 } = await supabase
-                .from('uploads')
-                .select('*');
+          let allData = [];
+          let from = 0;
+          const pageSize = 1000;
+          let hasMore = true;
+          
+          while (hasMore) {
+            const { data, error } = await supabase
+              .from('uploads')
+              .select('*')
+              .order('id', { ascending: true })
+              .range(from, from + pageSize - 1);
+              
+            if (error) {
+              const { data: data2, error: error2 } = await supabase.from('uploads').select('*');
               if (error2) throw error2;
-              return res.status(200).json(data2 || []);
+              return res.status(200).json((data2 || []).map(mapUploadFromDb));
             }
-            throw error;
+            
+            if (data && data.length > 0) {
+              allData = allData.concat(data);
+              if (data.length < pageSize) {
+                hasMore = false;
+              } else {
+                from += pageSize;
+              }
+            } else {
+              hasMore = false;
+            }
           }
-          return res.status(200).json(data || []);
+          
+          return res.status(200).json(allData.map(mapUploadFromDb));
         } catch (err) {
-          // Final fallback: try plain select
           const { data, error } = await supabase.from('uploads').select('*');
           if (error) {
-            const msg = (error.message || '').toLowerCase();
-            if (msg.includes('could not find the') || (msg.includes('column') && msg.includes('uploads'))) {
-              try {
-                const local = await getLocalDb();
-                return res.status(200).json(local.data.uploads || []);
-              } catch (e) {
-                throw error;
-              }
+            try {
+              const local = await getLocalDb();
+              return res.status(200).json(local.data.uploads || []);
+            } catch (e) {
+              throw error;
             }
-            throw error;
           }
-          return res.status(200).json(data || []);
+          return res.status(200).json((data || []).map(mapUploadFromDb));
         }
       } else {
         const db = await prepareDb();
@@ -76,6 +85,11 @@ export default async function handler(req, res) {
       documentType,
       uploadedAt,
       uploadedBy,
+      status,
+      keterangan,
+      analysis,
+      lastModified,
+      modifiedBy,
     } = req.body;
 
     if (!id || !puskesmas || !month || !year || !documentType || !uploadedAt) {
@@ -94,11 +108,17 @@ export default async function handler(req, res) {
       documentType,
       uploadedAt,
       uploadedBy: uploadedBy || null,
+      status: status || null,
+      keterangan: keterangan || null,
+      analysis: analysis || null,
+      lastModified: lastModified || null,
+      modifiedBy: modifiedBy || null,
     };
 
     try {
       if (isUsingSupabase()) {
         const supabase = getSupabase();
+        const dbEntry = mapUploadToDb(uploadEntry);
         const { data: existing, error: existingError } = await supabase
           .from('uploads')
           .select('id')
@@ -108,13 +128,13 @@ export default async function handler(req, res) {
         if (existing) {
           const { data, error } = await supabase
             .from('uploads')
-            .update(uploadEntry)
+            .update(dbEntry)
             .eq('id', id);
           if (error) throw error;
         } else {
           const { data, error } = await supabase
             .from('uploads')
-            .insert([uploadEntry]);
+            .insert([dbEntry]);
           if (error) throw error;
         }
       } else {

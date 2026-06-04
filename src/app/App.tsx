@@ -1,26 +1,77 @@
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import LoginPage from './pages/LoginPage';
-import BerandaPage from './pages/BerandaPage';
-import VerifikasiBerkasPage from './pages/VerifikasiBerkasPage';
-import UnggahBerkasPage from './pages/UnggahBerkasPage';
-import LaporanPage from './pages/LaporanPage';
-import RiwayatPage from './pages/RiwayatPage';
-import PengaturanPage from './pages/PengaturanPage';
-import ManajemenPenggunaPage from './pages/ManajemenPenggunaPage';
-import { getCurrentUser } from './utils/userData';
+import { getCurrentUser, updateSessionActivity } from './utils/userData';
 import SettingsProvider from './components/SettingsProvider';
 
+// Lazy load pages for efficient route-based code-splitting
+const MainLayout = React.lazy(() => import('./components/MainLayout'));
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const BerandaPage = React.lazy(() => import('./pages/BerandaPage'));
+const VerifikasiBerkasPage = React.lazy(() => import('./pages/VerifikasiBerkasPage'));
+const UnggahBerkasPage = React.lazy(() => import('./pages/UnggahBerkasPage'));
+const LaporanPage = React.lazy(() => import('./pages/LaporanPage'));
+const RiwayatPage = React.lazy(() => import('./pages/RiwayatPage'));
+const PengaturanPage = React.lazy(() => import('./pages/PengaturanPage'));
+const ManajemenPenggunaPage = React.lazy(() => import('./pages/ManajemenPenggunaPage'));
+
+const LoadingFallback = () => (
+  <div className="flex h-screen w-screen items-center justify-center bg-[#f7faf8]">
+    <div className="flex flex-col items-center gap-3">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#1f6f5f] border-t-transparent"></div>
+      <p className="font-['Mukta'] text-[15px] font-semibold text-[#1f6f5f]">Memuat Halaman...</p>
+    </div>
+  </div>
+);
+
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!getCurrentUser();
+  });
 
   useEffect(() => {
-    const checkAuth = () => { const user = getCurrentUser(); setIsAuthenticated(!!user); };
+    const checkAuth = () => { 
+      const user = getCurrentUser(); 
+      setIsAuthenticated(!!user); 
+    };
     checkAuth();
+
+    // Throttled activity updater
+    let lastActivityUpdate = 0;
+    const throttledUpdateActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityUpdate > 10000) { // at most once every 10 seconds
+        lastActivityUpdate = now;
+        updateSessionActivity();
+      }
+    };
+
+    // Add activity listeners
+    window.addEventListener('mousemove', throttledUpdateActivity);
+    window.addEventListener('keydown', throttledUpdateActivity);
+    window.addEventListener('click', throttledUpdateActivity);
+    window.addEventListener('scroll', throttledUpdateActivity);
+
+    // Periodic checking (every 10 seconds)
+    const checkInterval = setInterval(() => {
+      const user = getCurrentUser(); // This triggers the 2-hour inactivity logout and 'user-logout' event automatically
+      if (!user) {
+        setIsAuthenticated(false);
+      }
+    }, 10000);
+
     const handleLogout = () => setIsAuthenticated(false);
     window.addEventListener('user-logout', handleLogout);
     window.addEventListener('focus', checkAuth);
-    return () => { window.removeEventListener('user-logout', handleLogout); window.removeEventListener('focus', checkAuth); };
+
+    return () => {
+      window.removeEventListener('user-logout', handleLogout);
+      window.removeEventListener('focus', checkAuth);
+      window.removeEventListener('mousemove', throttledUpdateActivity);
+      window.removeEventListener('keydown', throttledUpdateActivity);
+      window.removeEventListener('click', throttledUpdateActivity);
+      window.removeEventListener('scroll', throttledUpdateActivity);
+      clearInterval(checkInterval);
+    };
   }, []);
 
   const currentUser = getCurrentUser();
@@ -29,20 +80,26 @@ export default function App() {
   return (
     <SettingsProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<LoginPage onLogin={() => setIsAuthenticated(true)} />} />
-          <Route path="/beranda" element={isAuthenticated ? <BerandaPage /> : <Navigate to="/" replace />} />
-          <Route path="/verifikasi-berkas" element={isAuthenticated ? <VerifikasiBerkasPage /> : <Navigate to="/" replace />} />
-          <Route path="/unggah-berkas" element={isAuthenticated ? <UnggahBerkasPage /> : <Navigate to="/" replace />} />
-          <Route path="/laporan" element={isAuthenticated ? <LaporanPage /> : <Navigate to="/" replace />} />
-          <Route path="/riwayat" element={isAuthenticated ? <RiwayatPage /> : <Navigate to="/" replace />} />
-          <Route path="/pengaturan" element={isAuthenticated ? <PengaturanPage /> : <Navigate to="/" replace />} />
-          {/* ✅ Route baru untuk Manajemen Pengguna (admin only) */}
-          <Route path="/pengaturan/pengguna" element={isAdmin ? <ManajemenPenggunaPage /> : <Navigate to="/pengaturan" replace />} />
-          <Route path="/pengaturan/tampilan" element={isAuthenticated ? <PengaturanPage /> : <Navigate to="/" replace />} />
-          <Route path="/pengaturan/notifikasi" element={isAuthenticated ? <PengaturanPage /> : <Navigate to="/" replace />} />
-          <Route path="/pengaturan/keamanan" element={isAuthenticated ? <PengaturanPage /> : <Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/" element={<LoginPage onLogin={() => setIsAuthenticated(true)} />} />
+            
+            {/* Wrap authenticated routes inside MainLayout */}
+            <Route element={isAuthenticated ? <MainLayout /> : <Navigate to="/" replace />}>
+              <Route path="/beranda" element={<BerandaPage />} />
+              <Route path="/verifikasi-berkas" element={<VerifikasiBerkasPage />} />
+              <Route path="/unggah-berkas" element={<UnggahBerkasPage />} />
+              <Route path="/laporan" element={<LaporanPage />} />
+              <Route path="/riwayat" element={<RiwayatPage />} />
+              <Route path="/pengaturan" element={<PengaturanPage />} />
+              {/* ✅ Route baru untuk Manajemen Pengguna (admin only) */}
+              <Route path="/pengaturan/pengguna" element={isAdmin ? <ManajemenPenggunaPage /> : <Navigate to="/pengaturan" replace />} />
+              <Route path="/pengaturan/tampilan" element={<PengaturanPage />} />
+              <Route path="/pengaturan/notifikasi" element={<PengaturanPage />} />
+              <Route path="/pengaturan/keamanan" element={<PengaturanPage />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </SettingsProvider>
   );

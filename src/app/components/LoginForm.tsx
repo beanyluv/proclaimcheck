@@ -31,11 +31,24 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
       user = await validateLoginOnServer(username, password);
     } catch (error) {
       console.warn('Server login tidak tersedia, fallback ke local', error);
+    }
+    // Jika server tidak menemukan user (null) atau server error, coba dari localStorage
+    if (!user) {
       user = validateLogin(username, password);
     }
 
     if (user) {
       setError('');
+      
+      // Restore photo from localStorage backup if it exists and is a real base64 image
+      const isRealFoto = user.foto && user.foto.startsWith('data:image/') && user.foto.length > 100;
+      if (!isRealFoto && user.username) {
+        const cachedPhoto = localStorage.getItem(`profile-photo-${user.username.toLowerCase()}`);
+        if (cachedPhoto && cachedPhoto.startsWith('data:image/') && cachedPhoto.length > 100) {
+          user.foto = cachedPhoto;
+        }
+      }
+      
       setCurrentUser(user);
       const loginTime = new Date().toLocaleString('id-ID', {
         day: '2-digit',
@@ -51,6 +64,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
         action: 'Login',
         kategori: 'Masuk',
         pesan: `${user.nama} berhasil login ke aplikasi`,
+        puskesmas: user.puskesmas || null,
       });
       onLogin();
     } else {

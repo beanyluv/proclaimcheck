@@ -1,5 +1,6 @@
 import { prepareDb, saveDb, isUsingSupabase } from '../_db.js';
 import { getSupabase } from '../supabase.js';
+import bcrypt from 'bcryptjs';
 
 const setCors = (res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
           .from('users')
           .select('*')
           .eq('id', req.query.id)
-          .single();
+          .maybeSingle();
         if (error || !data) {
           return res.status(404).json({ error: 'User not found' });
         }
@@ -31,35 +32,37 @@ export default async function handler(req, res) {
       }
 
       if (req.method === 'PUT') {
-        const { username, password, nama, email, role, foto } = req.body;
+        const { username, password, nama, email, role, foto, puskesmas } = req.body;
         const { data: existing } = await supabase
           .from('users')
           .select('*')
           .eq('id', req.query.id)
-          .single()
-          .catch(() => ({ data: null }));
+          .maybeSingle();
         if (!existing) {
           return res.status(404).json({ error: 'User not found' });
         }
 
-        const { data: duplicate } = await supabase
-          .from('users')
-          .select('id')
-          .eq('username', username)
-          .neq('id', req.query.id)
-          .single()
-          .catch(() => ({ data: null }));
-        if (duplicate) {
-          return res.status(400).json({ error: 'Username sudah digunakan' });
+        if (username !== undefined && username !== existing.username) {
+          const { data: duplicate } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .neq('id', req.query.id)
+            .maybeSingle();
+          if (duplicate) {
+            return res.status(400).json({ error: 'Username sudah digunakan' });
+          }
         }
 
+        const updatedPassword = password ? (password.startsWith('$2') ? password : bcrypt.hashSync(password, 10)) : existing.password;
         const updated = {
           username: username ?? existing.username,
-          password: password ? password : existing.password,
+          password: updatedPassword,
           nama: nama ?? existing.nama,
           email: email ?? existing.email,
           role: role ?? existing.role,
           foto: foto ?? existing.foto,
+          puskesmas: puskesmas ?? existing.puskesmas,
         };
 
         const { data, error } = await supabase
@@ -92,20 +95,24 @@ export default async function handler(req, res) {
       }
 
       if (req.method === 'PUT') {
-        const { username, password, nama, email, role, foto } = req.body;
-        const exists = users.some((user) => user.username === username && user.id !== req.query.id);
-        if (exists) {
-          return res.status(400).json({ error: 'Username sudah digunakan' });
+        const { username, password, nama, email, role, foto, puskesmas } = req.body;
+        if (username !== undefined && username !== users[userIndex].username) {
+          const exists = users.some((user) => user.username === username && user.id !== req.query.id);
+          if (exists) {
+            return res.status(400).json({ error: 'Username sudah digunakan' });
+          }
         }
 
+        const updatedPassword = password ? (password.startsWith('$2') ? password : bcrypt.hashSync(password, 10)) : users[userIndex].password;
         users[userIndex] = {
           ...users[userIndex],
           username: username ?? users[userIndex].username,
-          password: password ? password : users[userIndex].password,
+          password: updatedPassword,
           nama: nama ?? users[userIndex].nama,
           email: email ?? users[userIndex].email,
           role: role ?? users[userIndex].role,
           foto: foto ?? users[userIndex].foto,
+          puskesmas: puskesmas ?? users[userIndex].puskesmas,
         };
 
         await saveDb();

@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import imgImage3 from '../../imports/LaporanProclaimCheck/ecd5bb1c63617aeaceefdae80e49afd2e592d178.png';
-import Sidebar from '../components/Sidebar';
-import TopBar from '../components/TopBar';
 import { getCurrentUser } from '../utils/userData';
-import { getDocuments } from '../utils/documentData';
+import { getDocs, syncDocs } from '../utils/documentData';
 
 export default function LaporanPage() {
   const navigate = useNavigate();
@@ -13,22 +10,32 @@ export default function LaporanPage() {
   const [viewMode, setViewMode] = useState<'Bulanan' | 'Tahunan'>('Bulanan');
   const [selectedPuskesmas, setSelectedPuskesmas] = useState('Semua Puskesmas');
   
-  // Set default tanggal ke bulan ini (otomatis update berdasarkan tanggal sekarang)
-  const today = new Date();
-  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
-  
-  const [startDate, setStartDate] = useState(firstDayOfMonth);
-  const [endDate, setEndDate] = useState(lastDayOfMonth);
+  // Set default filter ke tahun 2026 agar selaras dengan beranda
+  const [selectedYear, setSelectedYear] = useState('2026');
+  const [selectedMonth, setSelectedMonth] = useState('Semua Bulan');
   const [currentPage, setCurrentPage] = useState(1);
-  const [allDocuments, setAllDocuments] = useState(getDocuments());
+  const [allDocuments, setAllDocuments] = useState(getDocs());
   const rowsPerPage = 5;
   const [isVerifikasiExpanded, setIsVerifikasiExpanded] = useState(true);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setAllDocuments(getDocuments());
-    }, 1000);
+    const user = getCurrentUser();
+    if (!user) {
+      navigate('/');
+      return;
+    }
+    if (user.role !== 'Administrasi Klaim') {
+      navigate('/beranda');
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    const sync = async () => {
+      const docs = await syncDocs();
+      setAllDocuments(docs);
+    };
+    sync();
+    const interval = setInterval(sync, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -47,27 +54,29 @@ export default function LaporanPage() {
     return doc.uploadedAt || doc.status || doc.lastModified;
   });
 
-  // Status kelompok berdasarkan 14 dokumen wajib per puskesmas per bulan
+  // Status kelompok berdasarkan 14 dokumen wajib per puskesmas per bulan/tahun
   // Rule: 
-  // 1. Jika ADA dokumen ditolak → "Tidak Layak" 
-  // 2. Jika SEMUA dokumen layak → "Layak"
-  // 3. Jika ada yang pending/tidak lengkap → "Menunggu Review"
+  // 1. Jika SEMUA dokumen layak → "Layak" (Terverifikasi)
+  // 2. Jika dokumen ditolak dominan (>= 3 berkas) → "Tidak Layak"
+  // 3. Jika berkas layak mayoritas (>= 10 berkas) dan ditolak sedikit (<= 2) → "Layak"
+  // 4. Jika di antaranya (banyak pending / belum dinilai) → "Menunggu Review"
   const getGroupStatus = (docs: any[]) => {
-    // Rule 1: Jika ada satu saja yang ditolak, langsung Tidak Layak
-    if (docs.some(doc => doc.status === 'Tidak Layak')) {
+    const totalDocs = docs.length;
+    const hasTidakLayak = docs.some(doc => doc.status === 'Tidak Layak');
+    const hasPendingOrUnverified = docs.some(doc => doc.status === 'Pending' || doc.status === 'Menunggu Review' || !doc.status);
+
+    // 1. Jika ada salah satu tidak layak -> Tidak Layak
+    if (hasTidakLayak) {
       return 'Tidak Layak';
     }
 
-    const layakCount = docs.filter(doc => doc.status === 'Layak').length;
-    const totalDocs = docs.length;
-
-    // Rule 2: Jika semua layak, maka Layak (Terverifikasi)
-    if (layakCount === totalDocs) {
-      return 'Layak';
+    // 2. Jika berkas belum lengkap (< 14) atau ada yang pending/belum dinilai -> Menunggu Review
+    if (totalDocs < 14 || hasPendingOrUnverified) {
+      return 'Menunggu Review';
     }
 
-    // Rule 3: Jika ada yang pending/kosong, maka Menunggu Review
-    return 'Menunggu Review';
+    // 3. Jika 14 berkas lengkap dan semuanya Layak -> Layak
+    return 'Layak';
   };
 
   // Helper untuk parse waktu dari format "25 Mei 2026, 12:16 WIB"
@@ -91,17 +100,24 @@ export default function LaporanPage() {
     }
   };
 
-  const createGroupKey = (puskesmas: string, month: string, year: string) =>
-    `${puskesmas}-${month}-${year}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const createGroupKey = (puskesmas: string, month: string, year: string) => {
+    if (viewMode === 'Tahunan') {
+      return `${puskesmas}-${year}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    }
+    return `${puskesmas}-${month}-${year}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  };
 
   const generateReportCode = (puskesmas: string, month: string, year: string) => {
-    const seed = `${puskesmas}-${month}-${year}`;
+    const seed = viewMode === 'Tahunan' ? `${puskesmas}-${year}` : `${puskesmas}-${month}-${year}`;
     let hash = 0;
     for (let i = 0; i < seed.length; i += 1) {
       hash = ((hash << 5) - hash) + seed.charCodeAt(i);
       hash |= 0;
     }
     const code = Math.abs(hash % 9000) + 1000;
+    if (viewMode === 'Tahunan') {
+      return `VX-${String(code).padStart(4, '0')}.Y`;
+    }
     const monthIndex = Object.keys(monthMap).indexOf(month) + 1 || 1;
     return `VX-${String(code).padStart(4, '0')}.${monthIndex}`;
   };
@@ -110,7 +126,7 @@ export default function LaporanPage() {
     const key = createGroupKey(doc.puskesmas, doc.month, doc.year);
     const monthNumber = monthMap[doc.month] ?? '01';
     const tanggalRaw = `${doc.year}-${monthNumber}-01`;
-    const tanggal = `${doc.month} ${doc.year}`;
+    const tanggal = viewMode === 'Tahunan' ? `Tahun ${doc.year}` : `${doc.month} ${doc.year}`;
 
     // Gunakan lastModified (waktu analisis) jika ada, jika tidak gunakan uploadedAt
     const relevantTime = doc.lastModified || doc.uploadedAt || '';
@@ -121,6 +137,7 @@ export default function LaporanPage() {
         tanggal,
         tanggalRaw,
         year: doc.year,
+        month: doc.month,
         latestUploadedAt: relevantTime,
         latestModifiedTime: doc.lastModified || '',
         puskesmas: doc.puskesmas,
@@ -151,15 +168,10 @@ export default function LaporanPage() {
 
   const filteredData = groupedLaporanData.filter(item => {
     const matchPuskesmas = selectedPuskesmas === 'Semua Puskesmas' || item.puskesmas === selectedPuskesmas;
+    const matchYear = item.year === selectedYear;
+    const matchMonth = viewMode === 'Tahunan' || selectedMonth === 'Semua Bulan' || item.month === selectedMonth;
 
-    const monthNumber = monthMap[item.tanggal.split(' ')[0]] ?? '01';
-    const monthStart = new Date(`${item.year}-${monthNumber}-01`);
-    const monthEnd = new Date(item.year, parseInt(monthNumber, 10), 0);
-    const start = startDate ? new Date(startDate) : null;
-    const end = endDate ? new Date(endDate) : null;
-    const matchDateRange = (!start || monthEnd >= start) && (!end || monthStart <= end);
-
-    return matchPuskesmas && matchDateRange;
+    return matchPuskesmas && matchYear && matchMonth;
   });
 
   // Hitung status berdasarkan alur dokumen terunggah
@@ -174,17 +186,17 @@ export default function LaporanPage() {
   const paginatedData = filteredData.slice(startIndex, startIndex + rowsPerPage);
 
   const handlePuskesmasChange = (value: string) => { setSelectedPuskesmas(value); setCurrentPage(1); };
-  const handleStartDateChange = (value: string) => { setStartDate(value); setCurrentPage(1); };
-  const handleEndDateChange = (value: string) => { setEndDate(value); setCurrentPage(1); };
+  const handleYearChange = (value: string) => { setSelectedYear(value); setCurrentPage(1); };
+  const handleMonthChange = (value: string) => { setSelectedMonth(value); setCurrentPage(1); };
 
   // ✅ REAL CSV EXPORT
   const handleExportCSV = () => {
-    const headers = ['No', 'ID Verifikasi', 'Tanggal', 'Waktu', 'Nama Puskesmas', 'Status'];
+    const headers = ['No', 'ID Verifikasi', 'Periode', 'Waktu', 'Nama Puskesmas', 'Status'];
     const rows = filteredData.map((item, index) => [
       index + 1,
       item.id,
       item.tanggal,
-      item.waktu,
+      item.waktu || '-',
       item.puskesmas,
       item.status || 'Belum Diverifikasi'
     ]);
@@ -199,7 +211,7 @@ export default function LaporanPage() {
     const link = document.createElement('a');
     link.href = url;
     const today = new Date().toISOString().slice(0, 10);
-    link.download = `laporan-proclaim-check-${today}.csv`;
+    link.download = `laporan-proclaim-check-${viewMode.toLowerCase()}-${selectedYear}-${today}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -227,15 +239,7 @@ export default function LaporanPage() {
   );
 
   return (
-    <div className="flex h-screen bg-white">
-      {/* Sidebar */}
-      <Sidebar avatarSrc={imgImage3} />
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar title="Laporan" avatarSrc={imgImage3} userName={currentUser?.nama} />
-
-        <div className="flex-1 bg-[#eee] bg-opacity-70 overflow-y-auto p-6">
+    <>
           {/* Filter Row */}
           <div className="bg-white rounded-[10px] p-4 mb-4 flex items-center gap-3 flex-wrap shadow-sm">
             <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
@@ -250,17 +254,27 @@ export default function LaporanPage() {
               aria-label="Pilih Puskesmas"
               className="border border-[#d0e2de] rounded-lg px-3 py-2 font-['Mukta'] text-[13px] focus:outline-none focus:border-[#1f6f5f] bg-white">
               <option>Semua Puskesmas</option>
-              {['Mulia Hati 1','Mulia Hati 2','Budi Mulia 1','Budi Mulia 2','Harapan Kasih 1','Harapan Kasih 2','Sentosa 1','Sentosa 2','Citra Medika 1','Citra Medika 2','Sehat Mandiri 1'].map(p => (
+              {['Mulia Hati 1','Mulia Hati 2','Budi Mulia 1','Budi Mulia 2','Harapan Kasih 1','Harapan Kasih 2','Sentosa 1','Sentosa 2','Citra Medika 1','Citra Medika 2','Sehat Mandiri 1','Sehat Mandiri 2'].map(p => (
                 <option key={p}>{p}</option>
               ))}
             </select>
-            <input type="date" value={startDate} onChange={e => handleStartDateChange(e.target.value)}
-              aria-label="Tanggal awal"
-              className="border border-[#d0e2de] rounded-lg px-3 py-2 font-['Mukta'] text-[13px] focus:outline-none focus:border-[#1f6f5f]" />
-            <span className="text-gray-500 font-['Mukta'] text-[13px]">s/d</span>
-            <input type="date" value={endDate} onChange={e => handleEndDateChange(e.target.value)}
-              aria-label="Tanggal akhir"
-              className="border border-[#d0e2de] rounded-lg px-3 py-2 font-['Mukta'] text-[13px] focus:outline-none focus:border-[#1f6f5f]" />
+            <select value={selectedYear} onChange={e => handleYearChange(e.target.value)}
+              title="Pilih Tahun"
+              className="border border-[#d0e2de] rounded-lg px-3 py-2 font-['Mukta'] text-[13px] focus:outline-none focus:border-[#1f6f5f] bg-white">
+              <option value="2024">Tahun 2024</option>
+              <option value="2025">Tahun 2025</option>
+              <option value="2026">Tahun 2026</option>
+            </select>
+            {viewMode === 'Bulanan' && (
+              <select value={selectedMonth} onChange={e => handleMonthChange(e.target.value)}
+                title="Pilih Bulan"
+                className="border border-[#d0e2de] rounded-lg px-3 py-2 font-['Mukta'] text-[13px] focus:outline-none focus:border-[#1f6f5f] bg-white">
+                <option value="Semua Bulan">Semua Bulan</option>
+                {['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'].map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            )}
             <div className="ml-auto">
               {/* ✅ Real CSV Export Button */}
               <button onClick={handleExportCSV}
@@ -300,7 +314,7 @@ export default function LaporanPage() {
             <div className="bg-[#f7fbfa] border-b border-[#d0e2de] grid grid-cols-12 py-3 px-4">
               <div className="col-span-1 text-[#5f9990] font-['Mukta'] font-bold text-[13px] text-center">No</div>
               <div className="col-span-2 text-[#5f9990] font-['Mukta'] font-bold text-[13px] text-center">ID</div>
-              <div className="col-span-2 text-[#5f9990] font-['Mukta'] font-bold text-[13px] text-center">Tanggal</div>
+              <div className="col-span-2 text-[#5f9990] font-['Mukta'] font-bold text-[13px] text-center">Periode</div>
               <div className="col-span-2 text-[#5f9990] font-['Mukta'] font-bold text-[13px] text-center">Waktu</div>
               <div className="col-span-3 text-[#5f9990] font-['Mukta'] font-bold text-[13px] text-center">Puskesmas</div>
               <div className="col-span-2 text-[#5f9990] font-['Mukta'] font-bold text-[13px] text-center">Status</div>
@@ -351,8 +365,6 @@ export default function LaporanPage() {
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

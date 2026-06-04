@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import imgImage3 from '../../imports/PengaturanProclaimCheck/ecd5bb1c63617aeaceefdae80e49afd2e592d178.png';
-import Sidebar from '../components/Sidebar';
-import TopBar from '../components/TopBar';
 import { getCurrentUser, updateUserProfile, changePassword, setCurrentUser, clearCurrentUser } from '../utils/userData';
 import { getSettings, updateSetting } from '../utils/settingsData';
 import { getUsersFromServer, updateUserOnServer } from '../utils/serverApi';
-import Group284 from "../../imports/Group284/Group284";
 
 export default function PengaturanPage() {
   const navigate = useNavigate();
@@ -59,6 +56,7 @@ export default function PengaturanPage() {
   });
 
   const [previewImage, setPreviewImage] = useState(imgImage3);
+  const [isNewImageUploaded, setIsNewImageUploaded] = useState(false);
 
   // Load current user data on mount
   useEffect(() => {
@@ -73,8 +71,10 @@ export default function PengaturanPage() {
         newPassword: '',
         confirmPassword: '',
       });
-      if (user.foto) {
+      if (user.foto && user.foto.startsWith('data:image/') && user.foto.length > 100) {
         setPreviewImage(user.foto);
+      } else {
+        setPreviewImage(imgImage3);
       }
     }
   }, []);
@@ -83,12 +83,84 @@ export default function PengaturanPage() {
     setActiveTab(getActiveTabFromPath(location.pathname));
   }, [location.pathname]);
 
+  const compressImage = (base64Str: string, callback: (compressed: string) => void) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 150;
+      const MAX_HEIGHT = 150;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        callback(compressedBase64);
+      } else {
+        callback(base64Str);
+      }
+    };
+    img.onerror = () => {
+      callback(base64Str);
+    };
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreviewImage(reader.result as string);
+        const rawBase64 = reader.result as string;
+        compressImage(rawBase64, async (compressed) => {
+          setPreviewImage(compressed);
+          setIsNewImageUploaded(true);
+          // Dispatch event to sync preview across Sidebar and TopBar immediately
+          window.dispatchEvent(new CustomEvent('profile-preview-updated', { detail: compressed }));
+
+          // Save immediately to local and server for bulletproof persistence upon reload/refresh!
+          if (currentUser) {
+            const updates = { foto: compressed };
+            try {
+              // Update local state first for immediate snappy UI response
+              const localUser = { ...currentUser, ...updates };
+              setCurrentUser(localUser);
+              setCurrentUserState(localUser);
+              if (localUser.username) {
+                localStorage.setItem(`profile-photo-${localUser.username.toLowerCase()}`, compressed);
+              }
+              window.dispatchEvent(new Event('profile-updated'));
+
+              // Then sync with server
+              const updatedUser = await updateUserOnServer(currentUser.id, updates);
+              setCurrentUser(updatedUser);
+              setCurrentUserState(updatedUser);
+              if (updatedUser.username) {
+                localStorage.setItem(`profile-photo-${updatedUser.username.toLowerCase()}`, compressed);
+              }
+              setIsNewImageUploaded(false);
+              window.dispatchEvent(new Event('profile-updated'));
+            } catch (error) {
+              console.warn('Server update profile foto langsung gagal, fallback ke local', error);
+              setIsNewImageUploaded(false);
+            }
+          }
+        });
       };
       reader.readAsDataURL(file);
     }
@@ -116,36 +188,43 @@ export default function PengaturanPage() {
   const handleSaveProfile = async () => {
     if (!currentUser) return;
 
-    const updates = {
+    // Conditionally include 'foto' in the updates only if a new photo was uploaded
+    const updates: any = {
       nama: profileData.nama,
       username: profileData.username,
       email: profileData.email,
-      foto: previewImage !== imgImage3 ? previewImage : undefined,
     };
+
+    if (isNewImageUploaded) {
+      updates.foto = previewImage;
+    }
 
     try {
       const updatedUser = await updateUserOnServer(currentUser.id, updates);
       setCurrentUser(updatedUser);
       setCurrentUserState(updatedUser);
+      if (isNewImageUploaded && previewImage && updatedUser.username) {
+        localStorage.setItem(`profile-photo-${updatedUser.username.toLowerCase()}`, previewImage);
+      }
+      setIsNewImageUploaded(false);
+      window.dispatchEvent(new Event('profile-updated'));
       setSaveMessage('Profil berhasil diperbarui');
       setSaveError('');
       setTimeout(() => setSaveMessage(''), 3000);
     } catch (error) {
       console.warn('Server update profile gagal, fallback ke local', error);
-      const success = updateUserProfile(currentUser.id, updates);
-      if (success) {
-        const updatedUser = getCurrentUser();
-        if (updatedUser) {
-          setCurrentUserState(updatedUser);
-        }
-        setSaveMessage('Profil berhasil diperbarui');
-        setSaveError('');
-        setTimeout(() => setSaveMessage(''), 3000);
-      } else {
-        setSaveError('Gagal memperbarui profil');
-        setSaveMessage('');
-        setTimeout(() => setSaveError(''), 3000);
+      // Ensure the local user state is also updated even if local cache doesn't contain this ID
+      const localUser = { ...currentUser, ...updates };
+      setCurrentUser(localUser);
+      setCurrentUserState(localUser);
+      if (isNewImageUploaded && previewImage && localUser.username) {
+        localStorage.setItem(`profile-photo-${localUser.username.toLowerCase()}`, previewImage);
       }
+      setIsNewImageUploaded(false);
+      window.dispatchEvent(new Event('profile-updated'));
+      setSaveMessage('Profil berhasil diperbarui');
+      setSaveError('');
+      setTimeout(() => setSaveMessage(''), 3000);
     }
   };
 
@@ -242,14 +321,7 @@ export default function PengaturanPage() {
   ];
 
   return (
-    <div className="flex h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
-      {/* Sidebar */}
-      <Sidebar avatarSrc={imgImage3} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar title="Pengaturan" avatarSrc={previewImage} userName={currentUser?.nama} />
-
-        {/* Content Area */}
-        <div className="flex-1 bg-[#eee] bg-opacity-70 dark:bg-gray-900 overflow-y-auto p-6">
+    <>
             {/* Profil Pengguna */}
             {activeTab === 'profil' && (
               <div className="max-w-4xl">
@@ -822,8 +894,6 @@ export default function PengaturanPage() {
                 </div>
               </div>
             )}
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

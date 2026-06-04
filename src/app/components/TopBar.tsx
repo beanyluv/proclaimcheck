@@ -9,6 +9,8 @@ import {
   MessageItem,
   NotificationItem,
 } from '../utils/communicationData';
+import { getMessagesFromServer, sendMessageToServer, markMessageDeletedOnServer, markMessageReadOnServer } from '../utils/serverApi';
+import { supabase } from '../utils/supabaseClient';
 
 interface TopBarProps {
   title: string;
@@ -34,6 +36,41 @@ const categoryStyles: Record<NotificationItem['category'], string> = {
   summary: 'bg-[#e4f5e6] text-[#1f6f5f]',
 };
 
+const getUserPuskesmas = (user: any): string | null => {
+  if (!user || user.role !== 'Petugas Puskesmas') return null;
+  const nameLower = (user.nama || '').toLowerCase();
+  const usernameLower = (user.username || '').toLowerCase();
+  const emailLower = (user.email || '').toLowerCase();
+  
+  const list = [
+    'Mulia Hati 1', 'Mulia Hati 2',
+    'Budi Mulia 1', 'Budi Mulia 2',
+    'Harapan Kasih 1', 'Harapan Kasih 2',
+    'Sentosa 1', 'Sentosa 2',
+    'Citra Medika 1', 'Citra Medika 2',
+    'Sehat Mandiri 1', 'Sehat Mandiri 2'
+  ];
+  
+  for (const p of list) {
+    if (nameLower.includes(p.toLowerCase())) {
+      return `Puskesmas ${p}`;
+    }
+  }
+  for (const p of list) {
+    const cleanP = p.replace(/\s+/g, '').toLowerCase();
+    if (usernameLower.includes(cleanP)) {
+      return `Puskesmas ${p}`;
+    }
+  }
+  for (const p of list) {
+    const cleanP = p.replace(/\s+/g, '').toLowerCase();
+    if (emailLower.includes(cleanP)) {
+      return `Puskesmas ${p}`;
+    }
+  }
+  return null;
+};
+
 const formatDate = (value: string) => {
   const date = new Date(value.replace(/\-/g, '/'));
   if (Number.isNaN(date.getTime())) return value;
@@ -47,23 +84,254 @@ const formatDate = (value: string) => {
 };
 
 export default function TopBar({ title, avatarSrc, userName }: TopBarProps) {
-  const currentUser = getCurrentUser();
-  const name = userName || currentUser?.nama || 'Pengguna';
+  const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setCurrentUser(getCurrentUser());
+      setPreviewAvatar(null);
+    };
+    const handlePreviewUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setPreviewAvatar(customEvent.detail);
+      }
+    };
+    window.addEventListener('profile-updated', handleUpdate);
+    window.addEventListener('settings-updated', handleUpdate);
+    window.addEventListener('profile-preview-updated', handlePreviewUpdate);
+    return () => {
+      window.removeEventListener('profile-updated', handleUpdate);
+      window.removeEventListener('settings-updated', handleUpdate);
+      window.removeEventListener('profile-preview-updated', handlePreviewUpdate);
+    };
+  }, []);
+
+  const name = currentUser?.nama || userName || 'Pengguna';
+  const avatar = previewAvatar
+    ? previewAvatar
+    : (currentUser?.foto && currentUser.foto.startsWith('data:image/') && currentUser.foto.length > 100
+      ? currentUser.foto
+      : avatarSrc);
+  
+  const dynamicRecipients = useMemo(() => {
+    if (currentUser?.role === 'Administrasi Klaim') {
+      return [
+        'Puskesmas Mulia Hati 1',
+        'Puskesmas Mulia Hati 2',
+        'Puskesmas Budi Mulia 1',
+        'Puskesmas Budi Mulia 2',
+        'Puskesmas Harapan Kasih 1',
+        'Puskesmas Harapan Kasih 2',
+        'Puskesmas Sentosa 1',
+        'Puskesmas Sentosa 2',
+        'Puskesmas Citra Medika 1',
+        'Puskesmas Citra Medika 2',
+        'Puskesmas Sehat Mandiri 1',
+        'Puskesmas Sehat Mandiri 2',
+      ];
+    } else {
+      return ['Administrasi Klaim'];
+    }
+  }, [currentUser?.role]);
+
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [messages, setMessages] = useState<MessageItem[]>(() => getMessages());
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => getNotifications());
   const [messageTab, setMessageTab] = useState<MessageTab>('inbox');
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [composeForm, setComposeForm] = useState({
-    to: recipients[0],
+    to: dynamicRecipients[0],
     subject: '',
     body: '',
   });
+
+  useEffect(() => {
+    setComposeForm(prev => ({ ...prev, to: dynamicRecipients[0] }));
+  }, [dynamicRecipients]);
+
   const panelRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        const serverMessages = await getMessagesFromServer();
+        if (serverMessages) {
+          setMessages(() => {
+            const localMsgs = getMessages();
+            const serverMsgIds = new Set(serverMessages.map((m: any) => m.id));
+            const localOnlyMsgs = localMsgs.filter((m: any) => !serverMsgIds.has(m.id));
+            
+            const userPuskesmas = currentUser?.puskesmas || getUserPuskesmas(currentUser);
+            const userPuskesmasShort = userPuskesmas ? userPuskesmas.replace('Puskesmas ', '') : '';
+
+            const formattedServerMsgs = serverMessages
+              .filter((m: any) => {
+                if (currentUser?.role === 'Administrasi Klaim') {
+                  return true;
+                }
+                const isFromMe = m.from === name || m.from === currentUser?.nama || (userPuskesmas && m.from === userPuskesmas);
+                const isToMe = m.to === name || m.to === currentUser?.nama || (userPuskesmas && m.to === userPuskesmas);
+                const matchesPuskesmasField = m.puskesmas && userPuskesmasShort && 
+                  (m.puskesmas.toLowerCase() === userPuskesmasShort.toLowerCase() || 
+                   m.puskesmas.toLowerCase() === userPuskesmas.toLowerCase());
+                return isFromMe || isToMe || matchesPuskesmasField;
+              })
+              .map((m: any) => {
+                const isFromMe = m.from === name || 
+                                 m.from === currentUser?.nama || 
+                                 (currentUser?.role === 'Administrasi Klaim' && m.from === 'Administrasi Klaim') ||
+                                 (userPuskesmas && m.from === userPuskesmas);
+                const direction = isFromMe ? 'sent' : 'inbox';
+                const localVersion = localMsgs.find(lm => lm.id === m.id);
+                
+                return {
+                  id: m.id,
+                  from: m.from,
+                  to: m.to,
+                  subject: m.subject,
+                  body: m.body,
+                  timestamp: m.timestamp,
+                  isRead: localVersion ? localVersion.isRead : m.isRead,
+                  direction,
+                  puskesmas: m.puskesmas || undefined
+                };
+              });
+            
+            const filteredLocalOnly = localOnlyMsgs.filter((m: any) => {
+              if (currentUser?.role === 'Administrasi Klaim') {
+                return true;
+              }
+              const isFromMe = m.from === name || m.from === currentUser?.nama || (userPuskesmas && m.from === userPuskesmas);
+              const isToMe = m.to === name || m.to === currentUser?.nama || (userPuskesmas && m.to === userPuskesmas);
+              return isFromMe || isToMe;
+            });
+
+            const merged = [...formattedServerMsgs, ...filteredLocalOnly];
+            merged.sort((a, b) => b.id.localeCompare(a.id));
+            saveMessages(merged);
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn('Gagal memuat pesan dari server:', err);
+      }
+    };
+    
+    fetchMessages();
+
+    // Supabase Realtime Subscription for instantaneous delivery
+    let channel: any = null;
+    if (supabase) {
+      channel = supabase
+        .channel('public-messages-changes')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages' },
+          (payload) => {
+            const m = payload.new;
+            const userPuskesmas = currentUser?.puskesmas || getUserPuskesmas(currentUser);
+            const userPuskesmasShort = userPuskesmas ? userPuskesmas.replace('Puskesmas ', '') : '';
+
+            const isFromMe = m.from === name || m.from === currentUser?.nama || (userPuskesmas && m.from === userPuskesmas);
+            const isToMe = m.to === name || m.to === currentUser?.nama || (userPuskesmas && m.to === userPuskesmas);
+            const matchesPuskesmasField = m.puskesmas && userPuskesmasShort && 
+              (m.puskesmas.toLowerCase() === userPuskesmasShort.toLowerCase() || 
+               m.puskesmas.toLowerCase() === userPuskesmas.toLowerCase());
+
+            if (currentUser?.role === 'Administrasi Klaim' || isFromMe || isToMe || matchesPuskesmasField) {
+              const direction = isFromMe ? 'sent' : 'inbox';
+              const newMsg: MessageItem = {
+                id: m.id,
+                from: m.from,
+                to: m.to,
+                subject: m.subject,
+                body: m.body,
+                timestamp: m.timestamp,
+                isRead: m.isread !== undefined ? m.isread : m.isRead,
+                direction,
+                puskesmas: m.puskesmas || undefined
+              };
+
+              setMessages((prev) => {
+                if (prev.some((msg) => msg.id === newMsg.id)) return prev;
+                const updated = [newMsg, ...prev];
+                updated.sort((a, b) => b.id.localeCompare(a.id));
+                saveMessages(updated);
+                return updated;
+              });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages' },
+          (payload) => {
+            const m = payload.new;
+            setMessages((prev) => {
+              const updated = prev.map((msg) => {
+                if (msg.id === m.id) {
+                  return {
+                    ...msg,
+                    body: m.body,
+                    isRead: m.isread !== undefined ? m.isread : m.isRead
+                  };
+                }
+                return msg;
+              });
+              saveMessages(updated);
+              return updated;
+            });
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'messages' },
+          (payload) => {
+            const deletedId = payload.old.id;
+            setMessages((prev) => {
+              const updated = prev.filter((msg) => msg.id !== deletedId);
+              saveMessages(updated);
+              return updated;
+            });
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (supabase && channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [name, currentUser?.nama, currentUser?.role]);
+
+  // Helper untuk mengecek apakah user saat ini telah menghapus pesan
+  const isDeletedByUser = (body: string | null | undefined, username: string) => {
+    if (!body) return false;
+    const match = body.match(/<!--deleted_by:(.*?)-->/);
+    if (!match) return false;
+    const users = match[1].split(',').filter(Boolean);
+    return users.includes(username);
+  };
+
+  // Helper untuk membersihkan metadata tag hapus dari isi pesan utama
+  const getCleanBody = (body: string | null | undefined) => {
+    if (!body) return '';
+    return body.replace(/<!--deleted_by:(.*?)-->/, '').trim();
+  };
+
+  const currentUsername = currentUser?.username || 'unknown';
+
+  // Saring hanya pesan-pesan yang tidak dihapus oleh user saat ini
+  const visibleMessages = useMemo(() => {
+    return messages.filter((msg) => !isDeletedByUser(msg.body, currentUsername));
+  }, [messages, currentUsername]);
+
   const unreadMessageCount = useMemo(
-    () => messages.filter((msg) => msg.direction === 'inbox' && !msg.isRead).length,
-    [messages]
+    () => visibleMessages.filter((msg) => msg.direction === 'inbox' && !msg.isRead).length,
+    [visibleMessages]
   );
   const unreadNotificationCount = useMemo(
     () => notifications.filter((item) => !item.isRead).length,
@@ -71,13 +339,13 @@ export default function TopBar({ title, avatarSrc, userName }: TopBarProps) {
   );
 
   const filteredMessages = useMemo(() => {
-    if (messageTab === 'sent') return messages.filter((msg) => msg.direction === 'sent');
-    return messages.filter((msg) => msg.direction === 'inbox');
-  }, [messages, messageTab]);
+    if (messageTab === 'sent') return visibleMessages.filter((msg) => msg.direction === 'sent');
+    return visibleMessages.filter((msg) => msg.direction === 'inbox');
+  }, [visibleMessages, messageTab]);
 
   const selectedMessage = useMemo(
-    () => messages.find((msg) => msg.id === selectedMessageId) || null,
-    [messages, selectedMessageId]
+    () => visibleMessages.find((msg) => msg.id === selectedMessageId) || null,
+    [visibleMessages, selectedMessageId]
   );
 
   useEffect(() => {
@@ -114,6 +382,11 @@ export default function TopBar({ title, avatarSrc, userName }: TopBarProps) {
       );
       saveMessages(updated);
       setMessages(updated);
+      
+      // Sinkronisasi status dibaca ke server Supabase agar persisten saat ganti sesi/refresh
+      markMessageReadOnServer(message.id, true).catch(err => {
+        console.warn('Gagal menandai pesan terbaca di server:', err);
+      });
     }
     setSelectedMessageId(message.id);
   };
@@ -131,23 +404,71 @@ export default function TopBar({ title, avatarSrc, userName }: TopBarProps) {
       minute: '2-digit',
     });
 
+    const userPuskesmas = currentUser?.puskesmas || getUserPuskesmas(currentUser);
+    const puskesmasVal = userPuskesmas 
+      ? userPuskesmas.replace('Puskesmas ', '') 
+      : (composeForm.to.startsWith('Puskesmas') ? composeForm.to.replace('Puskesmas ', '') : undefined);
+
     const newMessage: MessageItem = {
       id: `msg-${Date.now()}`,
-      from: name,
+      from: currentUser?.nama || name,
       to: composeForm.to,
       subject: composeForm.subject,
       body: composeForm.body,
       timestamp,
-      isRead: true,
+      isRead: false,
       direction: 'sent',
-      puskesmas: composeForm.to.startsWith('Puskesmas') ? composeForm.to.replace('Puskesmas ', '') : undefined,
+      puskesmas: puskesmasVal,
     };
 
     const updated = addMessage(newMessage);
     setMessages(updated);
-    setComposeForm({ to: recipients[0], subject: '', body: '' });
+    
+    // Kirim pesan ke server Supabase secara real-time
+    sendMessageToServer(newMessage).catch(err => {
+      console.warn('Gagal sinkronisasi pesan ke database server:', err);
+    });
+
+    setComposeForm({ to: dynamicRecipients[0], subject: '', body: '' });
     setMessageTab('sent');
     setSelectedMessageId(newMessage.id);
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus pesan ini?')) {
+      return;
+    }
+
+    try {
+      // 1. Perbarui status di server (tambahkan tag hapus)
+      await markMessageDeletedOnServer(messageId, currentUsername);
+    } catch (err) {
+      console.warn('Gagal sinkronisasi hapus ke database server, lakukan offline:', err);
+    }
+
+    // 2. Perbarui state lokal dengan menyisipkan tag hapus ke body in-memory
+    const updated = messages.map((msg) => {
+      if (msg.id === messageId) {
+        const users = isDeletedByUser(msg.body, currentUsername) ? [] : [currentUsername];
+        const match = (msg.body || '').match(/<!--deleted_by:(.*?)-->/);
+        const prevUsers = match ? match[1].split(',').filter(Boolean) : [];
+        const mergedUsers = Array.from(new Set([...prevUsers, ...users]));
+        const cleanBody = (msg.body || '').replace(/<!--deleted_by:(.*?)-->/, '').trim();
+        
+        return {
+          ...msg,
+          body: `${cleanBody}\n\n<!--deleted_by:${mergedUsers.join(',')}-->`
+        };
+      }
+      return msg;
+    });
+
+    saveMessages(updated);
+    setMessages(updated);
+
+    if (selectedMessageId === messageId) {
+      setSelectedMessageId(null);
+    }
   };
 
   return (
@@ -227,7 +548,7 @@ export default function TopBar({ title, avatarSrc, userName }: TopBarProps) {
                           onChange={(event) => setComposeForm({ ...composeForm, to: event.target.value })}
                           className="w-full rounded-lg border border-[#d8e8e1] px-3 py-2 text-[13px]"
                         >
-                          {recipients.map((recipient) => (
+                          {dynamicRecipients.map((recipient) => (
                             <option key={recipient} value={recipient}>{recipient}</option>
                           ))}
                         </select>
@@ -268,12 +589,24 @@ export default function TopBar({ title, avatarSrc, userName }: TopBarProps) {
                         </div>
                         <span className="text-[11px] text-[#7c8a82]">{selectedMessage.timestamp}</span>
                       </div>
-                      <div className="rounded-[16px] border border-[#e5ede9] bg-[#f8fbf7] p-4 text-[13px] text-[#3f554f] leading-6">
-                        {selectedMessage.body}
+                      <div className="rounded-[16px] border border-[#e5ede9] bg-[#f8fbf7] p-4 text-[13px] text-[#3f554f] leading-6 whitespace-pre-wrap">
+                        {getCleanBody(selectedMessage.body)}
                       </div>
-                      <div className="flex items-center gap-2 text-[12px] text-[#5a6b64]">
-                        <span>{selectedMessage.direction === 'sent' ? 'Terkirim ke' : 'Diterima dari'} {selectedMessage.direction === 'sent' ? selectedMessage.to : selectedMessage.from}</span>
-                        {selectedMessage.puskesmas && <span>• Faskes: {selectedMessage.puskesmas}</span>}
+                      <div className="flex items-center justify-between gap-2 text-[12px] text-[#5a6b64]">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span>{selectedMessage.direction === 'sent' ? 'Terkirim ke' : 'Diterima dari'} {selectedMessage.direction === 'sent' ? selectedMessage.to : selectedMessage.from}</span>
+                          {selectedMessage.puskesmas && <span className="truncate">• Faskes: {selectedMessage.puskesmas}</span>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMessage(selectedMessage.id)}
+                          className="flex items-center gap-1 text-[#FB4A4A] hover:text-[#d32f2f] font-semibold transition-colors cursor-pointer flex-shrink-0"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span>Hapus</span>
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -346,7 +679,7 @@ export default function TopBar({ title, avatarSrc, userName }: TopBarProps) {
         </div>
 
         <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity mr-2">
-          <img alt="Profile" className="w-[36px] h-[36px] rounded-full object-cover border-2 border-[rgba(0,0,0,0.1)] shadow-sm" src={avatarSrc} />
+          <img alt="Profile" className="w-[36px] h-[36px] rounded-full object-cover border-2 border-[rgba(0,0,0,0.1)] shadow-sm" src={avatar} />
           <span className="font-['Mukta'] text-[16px] font-medium text-black">{name}</span>
         </div>
       </div>
