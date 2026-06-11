@@ -1,8 +1,7 @@
 
   # PROCLAIM CHECK
 
-  This is a code bundle for PROCLAIM CHECK. The original project is available at https://www.figma.com/design/In6hTHTXaXpJDW7IYNro2U/PROCLAIM-CHECK.
-
+  This is a code bundle for PROCLAIM CHECK. 
   ## Running the code
 
   Run `npm i` to install the dependencies.
