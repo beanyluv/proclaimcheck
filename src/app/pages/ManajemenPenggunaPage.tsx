@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from '../utils/subdomain';
 import { getUsers, saveUsers, getCurrentUser } from '../utils/userData';
 import { getUsersFromServer, createUserOnServer, updateUserOnServer, deleteUserOnServer } from '../utils/serverApi';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
@@ -8,7 +8,7 @@ interface User { id: string; username: string; password: string; nama: string; e
 
 const ROLES = ['Administrasi Klaim', 'Petugas Puskesmas'];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-  'Administrasi Klaim': ['Beranda', 'Verifikasi Berkas', 'Laporan', 'Riwayat', 'Pengaturan'],
+  'Administrasi Klaim': ['Beranda', 'Verifikasi Berkas', 'Laporan', 'Log Aktivitas', 'Pengaturan'],
   'Petugas Puskesmas': ['Beranda', 'Unggah Berkas'],
 };
 
@@ -265,7 +265,7 @@ export default function ManajemenPenggunaPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {['Beranda','Verifikasi Berkas','Unggah Berkas','Laporan','Riwayat','Pengaturan'].map(menu => (
+                  {['Beranda','Verifikasi Berkas','Unggah Berkas','Laporan','Log Aktivitas','Pengaturan'].map(menu => (
                     <tr key={menu} className="border-b border-[#f8f8f8]">
                       <td className="px-4 py-2.5 font-['Mukta'] text-[13px] text-[#1a4a43] font-medium">{menu}</td>
                       {Object.values(ROLE_PERMISSIONS).map((perms, i) => (

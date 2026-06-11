@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from '../utils/subdomain';
 import imgImage3 from '../../imports/PengaturanProclaimCheck/ecd5bb1c63617aeaceefdae80e49afd2e592d178.png';
 import { getCurrentUser, updateUserProfile, changePassword, setCurrentUser, clearCurrentUser } from '../utils/userData';
 import { getSettings, updateSetting } from '../utils/settingsData';

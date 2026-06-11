@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from '../utils/subdomain';
 import { getDocs, saveDocs, addRiwayat, genDocs, syncDocs, documentTypes } from '../utils/documentData';
 import { getCurrentUser } from '../utils/userData';
 import { getUploadedFilesFromServer, uploadFileToServer } from '../utils/serverApi';

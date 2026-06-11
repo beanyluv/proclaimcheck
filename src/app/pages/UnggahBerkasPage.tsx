@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from '../utils/subdomain';
 import { getDocs, saveDocs, resetDocs, addRiwayat, createDocumentId, documentTypes } from '../utils/documentData';
 import { getCurrentUser } from '../utils/userData';
 import { uploadFileToServer, getUploadedFilesFromServer } from '../utils/serverApi';
@@ -480,10 +480,6 @@ export default function UnggahBerkasPage() {
                       Reset
                     </button>
                   </div>
-                  <button onClick={handleResetUploads}
-                    className="w-full px-6 py-3 border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 rounded-[8px] font-['Mukta'] text-[15px] font-medium transition-colors">
-                    Reset Semua Unggahan
-                  </button>
                 </div>
               </div>
             </div>

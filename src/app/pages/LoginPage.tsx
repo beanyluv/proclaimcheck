@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../utils/subdomain';
 import imgGeminiGeneratedImageDc0Jg2Dc0Jg2Dc0J1 from "figma:asset/3c124ebb301c4c59559cc4676c1ac49ddf81b7aa.png";
 import imgKelompok2BPptPjd2026Sesi13 from "figma:asset/ffce630baec0cd31633a2dae4066e097077dd679.png";
 import LoginForm from '../components/LoginForm';

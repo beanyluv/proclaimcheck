@@ -16,7 +16,7 @@ export default function MainLayout() {
     }
     if (path.startsWith('/unggah-berkas')) return 'Unggah Berkas';
     if (path.startsWith('/laporan')) return 'Laporan';
-    if (path.startsWith('/riwayat')) return 'Aktivitas Masuk';
+    if (path.startsWith('/riwayat')) return 'Log Aktivitas';
     if (path.startsWith('/pengaturan/pengguna')) return 'Manajemen Pengguna';
     if (path.startsWith('/pengaturan')) return 'Pengaturan';
     return 'ProClaim Check';

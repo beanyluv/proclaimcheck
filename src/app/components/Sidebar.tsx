@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from '../utils/subdomain';
 import { getCurrentUser, clearCurrentUser } from '../utils/userData';
 import Group284 from '../../imports/Group284/Group284';
 import {
@@ -64,7 +64,7 @@ export default function Sidebar({ avatarSrc }: SidebarProps) {
           { path: '/laporan', label: 'Laporan' },
         ]
       : []),
-    { path: '/riwayat', label: 'Riwayat' },
+    { path: '/riwayat', label: 'Log Aktivitas' },
   ];
 
   const verifikasiChildren = [
@@ -206,8 +206,9 @@ export default function Sidebar({ avatarSrc }: SidebarProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </div>
-            <div className={`overflow-hidden transition-all duration-200 ${isVerifikasiOpen ? 'max-h-24 opacity-100' : 'max-h-0 opacity-0'}`}>
+            <div className={`overflow-hidden transition-all duration-200 ${isVerifikasiOpen ? 'max-h-36 opacity-100' : 'max-h-0 opacity-0'}`}>
               <div className="ml-4 mt-1 space-y-1">
+
                 {filteredVerifikasiChildren.map((item) => (
                   <div key={item.path}>{subItem(item.path, item.label)}</div>
                 ))}

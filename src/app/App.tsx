@@ -1,7 +1,8 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { getCurrentUser, updateSessionActivity } from './utils/userData';
 import SettingsProvider from './components/SettingsProvider';
+import { getSubdomainInfo, navigateWithSubdomain, isSubdomainRoutingEnabled } from './utils/subdomain';
 
 // Lazy load pages for efficient route-based code-splitting
 const MainLayout = React.lazy(() => import('./components/MainLayout'));
@@ -22,6 +23,45 @@ const LoadingFallback = () => (
     </div>
   </div>
 );
+
+// Intercepts path requests and enforces subdomain routing scopes
+function SubdomainRedirector() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentUser = getCurrentUser();
+
+  useEffect(() => {
+    if (!currentUser) return;
+    if (!isSubdomainRoutingEnabled()) return;
+
+    const { subdomain, targetPath } = getSubdomainInfo();
+    const currentPath = location.pathname;
+
+    // 1. Root redirect based on subdomain
+    if (subdomain && (currentPath === '/' || currentPath === '/beranda') && targetPath) {
+      navigate(targetPath, { replace: true });
+      return;
+    }
+
+    // 2. Redirect to correct subdomain if route scope doesn't match the current subdomain
+    let pathSubdomain = '';
+    if (currentPath.startsWith('/unggah-berkas')) {
+      pathSubdomain = 'unggah';
+    } else if (currentPath.startsWith('/verifikasi-berkas')) {
+      pathSubdomain = 'analisis';
+    } else if (currentPath.startsWith('/laporan')) {
+      pathSubdomain = 'pelaporan';
+    } else if (currentPath.startsWith('/riwayat')) {
+      pathSubdomain = 'riwayat';
+    }
+
+    if (pathSubdomain && pathSubdomain !== subdomain) {
+      navigateWithSubdomain(currentPath);
+    }
+  }, [location.pathname, currentUser, navigate]);
+
+  return null;
+}
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -80,6 +120,7 @@ export default function App() {
   return (
     <SettingsProvider>
       <BrowserRouter>
+        <SubdomainRedirector />
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<LoginPage onLogin={() => setIsAuthenticated(true)} />} />
@@ -104,3 +145,4 @@ export default function App() {
     </SettingsProvider>
   );
 }
+

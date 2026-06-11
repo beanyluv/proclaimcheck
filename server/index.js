@@ -542,8 +542,8 @@ app.get('/api/riwayat', async (req, res) => {
 
 app.post('/api/riwayat', async (req, res) => {
   const { id, waktu, username, user, role, action, kategori, pesan, docId, puskesmas } = req.body;
-  if (!id || !waktu || !role || !action || !kategori || !pesan) {
-    return res.status(400).json({ error: 'Missing required riwayat fields' });
+  if (!id || !waktu || !pesan) {
+    return res.status(400).json({ error: 'Missing required fields: id, waktu, pesan' });
   }
 
   const riwayatEntry = {
@@ -551,9 +551,9 @@ app.post('/api/riwayat', async (req, res) => {
     waktu,
     username: username || '',
     user: user || '',
-    role,
-    action,
-    kategori,
+    role: role || 'Pengguna',
+    action: action || 'Lainnya',
+    kategori: kategori || 'Umum',
     pesan,
     docId: docId || null,
     puskesmas: puskesmas || null
